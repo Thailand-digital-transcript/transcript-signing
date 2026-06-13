@@ -1,6 +1,10 @@
 package com.wpanther.transcript.signing.infrastructure.persistence.outbox;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Index;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -33,9 +37,8 @@ public class OutboxEventEntity {
     @Column(name = "payload", nullable = false, columnDefinition = "TEXT")
     private String payload;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
-    private String status;  // OutboxStatus from saga-commons — using String here avoids tight coupling
+    private String status;
 
     @Column(name = "retry_count", nullable = false)
     private int retryCount;

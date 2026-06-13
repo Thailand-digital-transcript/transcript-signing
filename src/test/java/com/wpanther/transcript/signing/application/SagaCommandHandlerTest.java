@@ -86,6 +86,7 @@ class SagaCommandHandlerTest {
     void handleSigningCommand_transactionIdAlreadySet_skipsCscAndReembeds() {
         var doc = signingDocWithTransactionId("doc-001");
         when(repository.findByDocumentId("doc-001")).thenReturn(Optional.of(doc));
+        doAnswer(inv -> inv.getArgument(0)).when(repository).save(any());
         byte[] xmlBytes = "<xml/>".getBytes();
         lenient().when(documentStoragePort.downloadByKey("XML/doc-001/attempt-0/original.xml")).thenReturn(xmlBytes);
         when(xadesSigningService.embedAndUpload(any(), eq("stored-sig"), eq("stored-cert"),
@@ -154,6 +155,74 @@ class SagaCommandHandlerTest {
         verify(repository, never()).save(any());
     }
 
+    // Phase 2: original-document S3 upload failure (new document)
+    @Test
+    void handleSigningCommand_originalUploadFails_publishesFailure() {
+        when(repository.findByDocumentId("doc-up")).thenReturn(Optional.empty());
+        when(documentStoragePort.upload(any(), anyString()))
+                .thenThrow(new RuntimeException("s3 down"));
+        var command = signingCommand("doc-up", SigningFormat.XML, "<xml/>", null);
+
+        handler.handleSigningCommand(command);
+
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(), contains("S3 upload"));
+    }
+
+    // Phase 3: max retries reached on first attempt (new document, maxRetries=0)
+    @Test
+    void handleSigningCommand_newDocMaxRetriesZero_publishesFailure() {
+        signingProperties.setMaxRetries(0);
+        when(repository.findByDocumentId("doc-mr")).thenReturn(Optional.empty());
+        when(documentStoragePort.upload(any(), anyString()))
+                .thenReturn(new StorageResult("XML/doc-mr/attempt-0/original.xml", "http://o", 10));
+        var command = signingCommand("doc-mr", SigningFormat.XML, "<xml/>", null);
+
+        handler.handleSigningCommand(command);
+
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(), contains("retry"));
+    }
+
+    // Phase 4a: CSC signing failure on a retry of an existing FAILED PDF document
+    @Test
+    void handleSigningCommand_cscSigningFails_marksFailedAndPublishesFailure() {
+        var doc = failedPdfDoc("doc-csc");
+        when(repository.findByDocumentId("doc-csc")).thenReturn(Optional.of(doc));
+        doAnswer(inv -> inv.getArgument(0)).when(repository).save(any());
+        byte[] pdfBytes = "pdf".getBytes();
+        when(documentStoragePort.downloadByKey("PDF/doc-csc/attempt-0/original.pdf"))
+                .thenReturn(pdfBytes);
+        when(padesSigningService.computeAndSign(pdfBytes))
+                .thenThrow(new RuntimeException("csc 500"));
+        var command = signingCommand("doc-csc", SigningFormat.PDF, null, "http://host/d.pdf");
+
+        handler.handleSigningCommand(command);
+
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(),
+                contains("CSC signing failed"));
+    }
+
+    // Phase 4b: signature embed/upload failure
+    @Test
+    void handleSigningCommand_embedUploadFails_marksFailedAndPublishesFailure() {
+        when(repository.findByDocumentId("doc-eb")).thenReturn(Optional.empty());
+        byte[] xmlBytes = "<xml/>".getBytes();
+        when(documentStoragePort.upload(xmlBytes, "XML/doc-eb/attempt-0/original.xml"))
+                .thenReturn(new StorageResult("XML/doc-eb/attempt-0/original.xml",
+                        "http://o", xmlBytes.length));
+        doAnswer(inv -> inv.getArgument(0)).when(repository).save(any());
+        when(xadesSigningService.computeAndSign(xmlBytes))
+                .thenReturn(new SignHashResult("txn", "sig", "cert"));
+        when(xadesSigningService.embedAndUpload(eq(xmlBytes), eq("sig"), eq("cert"),
+                eq("doc-eb"), eq(0)))
+                .thenThrow(new RuntimeException("embed boom"));
+        var command = signingCommand("doc-eb", SigningFormat.XML, "<xml/>", null);
+
+        handler.handleSigningCommand(command);
+
+        verify(sagaReplyPort).publishFailure(anyString(), any(), anyString(),
+                contains("embed/upload"));
+    }
+
     // Compensation
     @Test
     void handleCompensationCommand_noRecord_publishesCompensatedImmediately() {
@@ -196,6 +265,20 @@ class SagaCommandHandlerTest {
         verify(sagaReplyPort).publishCompensated(anyString(), any(), anyString());
     }
 
+    @Test
+    void handleCompensationCommand_s3DeleteFails_stillDeletesDbAndPublishesCompensated() {
+        var doc = completedDoc("doc-del");
+        when(repository.findByDocumentId("doc-del")).thenReturn(Optional.of(doc));
+        doThrow(new RuntimeException("s3 delete failed")).when(documentStoragePort).delete(anyString());
+        var command = compensateCommand("doc-del");
+
+        handler.handleCompensationCommand(command);
+
+        // S3 deletion is best-effort: failures are swallowed and compensation still completes
+        verify(repository).deleteById(doc.getId());
+        verify(sagaReplyPort).publishCompensated(anyString(), any(), anyString());
+    }
+
     // Helpers
     private ProcessTranscriptSigningCommand signingCommand(String docId, SigningFormat format,
                                                             String xml, String pdfUrl) {
@@ -220,6 +303,14 @@ class SagaCommandHandlerTest {
                 "XML/doc-001/attempt-0/original.xml", "http://orig", 100L);
         doc.startSigning();
         doc.saveTransactionCheckpoint("txn-001", "stored-sig", "stored-cert");
+        return doc;
+    }
+
+    private SignedTranscriptDocument failedPdfDoc(String docId) {
+        var doc = SignedTranscriptDocument.create(docId, "TH-2026-001", SigningFormat.PDF,
+                "PDF/" + docId + "/attempt-0/original.pdf", "http://orig", 100L);
+        doc.startSigning();
+        doc.markFailed("prior failure");
         return doc;
     }
 

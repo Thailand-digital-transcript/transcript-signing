@@ -20,8 +20,8 @@ import java.util.List;
  * <p>Implements Phase 6 of the spec ("Outbox relay: Camel Kafka producer publishes
  * all three outbox events after DB commit").
  *
- * <p>Disabled by default in tests via {@code app.outbox.relay.enabled=false} so that
- * integration tests can poll for events without a competing relay draining the table.
+ * <p>Enabled in integration tests so that outbox entries written by the service reach
+ * the Kafka reply topics that the IT assertions poll.
  */
 @Slf4j
 @Component

@@ -22,7 +22,7 @@ app:
     max-retries: 3
   outbox:
     relay:
-      enabled: false
+      enabled: true
 
 eureka:
   client:

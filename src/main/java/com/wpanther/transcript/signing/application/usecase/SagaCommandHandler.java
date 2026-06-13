@@ -110,8 +110,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                     maxRetriesHit[0] = true;
                     return null;
                 }
-                repository.save(newDoc);
-                return newDoc;
+                return repository.save(newDoc);
             });
 
             if (document == null || maxRetriesHit[0]) {
@@ -132,8 +131,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                 if (existingDoc.getStatus() != SigningStatus.SIGNING) {
                     existingDoc.startSigning();
                 }
-                repository.save(existingDoc);
-                return existingDoc;
+                return repository.save(existingDoc);
             });
 
             if (document == null || maxRetriesHit[0]) {
@@ -166,10 +164,11 @@ public class SagaCommandHandler implements SagaCommandPort {
                 return;
             }
 
-            // TX1.5: persist transactionId and pendingSignature
+            // TX1.5: persist transactionId and pendingSignature; capture the saved object so
+            // version is updated before TX2 uses it (avoids OptimisticLockException in TX2)
             final SignHashResult signHashFinal = signHashResult;
             final SignedTranscriptDocument checkpointDoc = document;
-            transactionTemplate.execute(status -> {
+            document = transactionTemplate.execute(status -> {
                 checkpointDoc.saveTransactionCheckpoint(
                         signHashFinal.transactionId(),
                         signHashFinal.pendingSignature(),

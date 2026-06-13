@@ -45,14 +45,15 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
         kafkaHelper.sendCommand(topics.getSagaCommandTranscriptSigning(), command);
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            var reply = kafkaHelper.pollOne(topics.getSagaReplyTranscriptSigning(),
-                    Duration.ofSeconds(2));
+            var reply = kafkaHelper.pollFor(topics.getSagaReplyTranscriptSigning(),
+                    Duration.ofSeconds(2), "saga-it-001");
             assertThat(reply).isPresent();
             assertThat(reply.get().value()).contains("SUCCESS");
         });
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            var event = kafkaHelper.pollOne(topics.getTranscriptSigned(), Duration.ofSeconds(2));
+            var event = kafkaHelper.pollFor(topics.getTranscriptSigned(),
+                    Duration.ofSeconds(2), "doc-it-001");
             assertThat(event).isPresent();
             assertThat(event.get().value()).contains("doc-it-001");
         });
@@ -88,6 +89,6 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
     }
 
     private String fakeCertBase64() {
-        return Base64.getEncoder().encodeToString(new byte[512]);
+        return TEST_CERT_DER_BASE64;
     }
 }

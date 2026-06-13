@@ -36,8 +36,8 @@ class TranscriptSigningCompensationIT extends IntegrationTestBase {
         kafkaHelper.sendCommand(topics.getSagaCompensationTranscriptSigning(), command);
 
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-            var reply = kafkaHelper.pollOne(topics.getSagaReplyTranscriptSigning(),
-                    Duration.ofSeconds(2));
+            var reply = kafkaHelper.pollFor(topics.getSagaReplyTranscriptSigning(),
+                    Duration.ofSeconds(2), "saga-comp-001");
             assertThat(reply).isPresent();
             assertThat(reply.get().value()).contains("COMPENSATED");
         });

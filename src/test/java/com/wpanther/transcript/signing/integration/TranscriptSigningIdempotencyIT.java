@@ -61,8 +61,8 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
         // First command: full pipeline → COMPLETED in DB
         kafkaHelper.sendCommand(topics.getSagaCommandTranscriptSigning(), firstCommand);
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            var reply = kafkaHelper.pollOne(topics.getSagaReplyTranscriptSigning(),
-                    Duration.ofSeconds(2));
+            var reply = kafkaHelper.pollFor(topics.getSagaReplyTranscriptSigning(),
+                    Duration.ofSeconds(2), "saga-idem-001");
             assertThat(reply).isPresent();
             assertThat(reply.get().value()).contains("SUCCESS");
         });
@@ -83,8 +83,8 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
 
         kafkaHelper.sendCommand(topics.getSagaCommandTranscriptSigning(), replayCommand);
         await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-            var reply = kafkaHelper.pollOne(topics.getSagaReplyTranscriptSigning(),
-                    Duration.ofSeconds(2));
+            var reply = kafkaHelper.pollFor(topics.getSagaReplyTranscriptSigning(),
+                    Duration.ofSeconds(2), "saga-idem-002");
             assertThat(reply).isPresent();
             assertThat(reply.get().value()).contains("SUCCESS");
             // documentId in the reply confirms it is the same record, not a new one
@@ -136,7 +136,7 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"cert\":{\"certificates\":[\"" +
-                                Base64.getEncoder().encodeToString(new byte[512]) +
+                                TEST_CERT_DER_BASE64 +
                                 "\"]},\"key\":{\"algo\":\"RSA\"}}")));
     }
 

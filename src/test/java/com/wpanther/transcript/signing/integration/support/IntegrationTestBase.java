@@ -2,6 +2,14 @@ package com.wpanther.transcript.signing.integration.support;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +21,21 @@ import org.testcontainers.containers.MinIOContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
+
+import java.math.BigInteger;
+import java.net.URI;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.Security;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.Date;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -32,13 +55,74 @@ public abstract class IntegrationTestBase {
 
     protected static WireMockServer wireMock;
 
+    /**
+     * Base64-encoded DER X.509 certificate (no PEM headers) generated once for all ITs.
+     * PadesCmsBuilder.parseCertificate() and XadesSignatureEmbedder both accept raw DER base64.
+     */
+    protected static String TEST_CERT_DER_BASE64;
+
+    static final String BUCKET = "signed-transcripts";
+
     @BeforeAll
     static void startContainers() {
         POSTGRES.start();
         KAFKA.start();
         MINIO.start();
-        wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
-        wireMock.start();
+        // WireMock is shared across all test classes (Spring context is cached with its
+        // port). Only create it once; subsequent @BeforeAll calls reuse the running instance.
+        if (wireMock == null || !wireMock.isRunning()) {
+            wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
+            wireMock.start();
+        }
+        if (TEST_CERT_DER_BASE64 == null) {
+            TEST_CERT_DER_BASE64 = generateSelfSignedCertBase64();
+        }
+        createMinioBucket();
+    }
+
+    private static String generateSelfSignedCertBase64() {
+        try {
+            if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+                Security.addProvider(new BouncyCastleProvider());
+            }
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
+            kpg.initialize(2048);
+            KeyPair kp = kpg.generateKeyPair();
+
+            X500Name subject = new X500Name("CN=TestCA");
+            SubjectPublicKeyInfo spki = SubjectPublicKeyInfo.getInstance(kp.getPublic().getEncoded());
+            JcaX509v3CertificateBuilder builder = new JcaX509v3CertificateBuilder(
+                    subject, BigInteger.ONE,
+                    new Date(System.currentTimeMillis() - 60_000),
+                    new Date(System.currentTimeMillis() + 365L * 24 * 60 * 60 * 1000),
+                    subject, spki);
+            ContentSigner signer = new JcaContentSignerBuilder("SHA256WithRSA")
+                    .setProvider(BouncyCastleProvider.PROVIDER_NAME)
+                    .build(kp.getPrivate());
+            X509CertificateHolder holder = builder.build(signer);
+            X509Certificate cert = new JcaX509CertificateConverter()
+                    .setProvider(BouncyCastleProvider.PROVIDER_NAME)
+                    .getCertificate(holder);
+            return Base64.getEncoder().encodeToString(cert.getEncoded());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to generate test certificate", e);
+        }
+    }
+
+    private static void createMinioBucket() {
+        try (S3Client s3 = S3Client.builder()
+                .endpointOverride(URI.create(MINIO.getS3URL()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("minioadmin", "minioadmin")))
+                .region(Region.US_EAST_1)
+                .forcePathStyle(true)
+                .build()) {
+            try {
+                s3.createBucket(CreateBucketRequest.builder().bucket(BUCKET).build());
+            } catch (BucketAlreadyOwnedByYouException ignored) {
+                // containers are shared across test classes — bucket already exists
+            }
+        }
     }
 
     @DynamicPropertySource
@@ -52,6 +136,8 @@ public abstract class IntegrationTestBase {
         registry.add("app.storage.secret-key", () -> "minioadmin");
         registry.add("app.csc.service-url",
                 () -> "http://localhost:" + wireMock.port());
+        registry.add("app.csc.oauth2.token-url",
+                () -> "http://localhost:" + wireMock.port() + "/oauth2/token");
     }
 
     @AfterEach

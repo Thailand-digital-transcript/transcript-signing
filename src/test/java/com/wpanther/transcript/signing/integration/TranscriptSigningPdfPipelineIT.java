@@ -48,14 +48,15 @@ class TranscriptSigningPdfPipelineIT extends IntegrationTestBase {
         kafkaHelper.sendCommand(topics.getSagaCommandTranscriptSigning(), command);
 
         await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
-            var reply = kafkaHelper.pollOne(topics.getSagaReplyTranscriptSigning(),
-                    Duration.ofSeconds(2));
+            var reply = kafkaHelper.pollFor(topics.getSagaReplyTranscriptSigning(),
+                    Duration.ofSeconds(2), "saga-pdf-it-001");
             assertThat(reply).isPresent();
             assertThat(reply.get().value()).contains("SUCCESS");
         });
 
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-            var event = kafkaHelper.pollOne(topics.getTranscriptSigned(), Duration.ofSeconds(2));
+            var event = kafkaHelper.pollFor(topics.getTranscriptSigned(),
+                    Duration.ofSeconds(2), "doc-pdf-it-001");
             assertThat(event).isPresent();
             assertThat(event.get().value()).contains("doc-pdf-it-001");
         });
@@ -92,7 +93,7 @@ class TranscriptSigningPdfPipelineIT extends IntegrationTestBase {
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"cert\":{\"certificates\":[\"" +
-                                Base64.getEncoder().encodeToString(new byte[512]) +
+                                TEST_CERT_DER_BASE64 +
                                 "\"]},\"key\":{\"algo\":\"RSA\"}}")));
     }
 

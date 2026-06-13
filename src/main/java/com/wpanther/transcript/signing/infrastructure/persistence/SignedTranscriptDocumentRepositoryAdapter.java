@@ -19,7 +19,7 @@ public class SignedTranscriptDocumentRepositoryAdapter
     @Override
     public SignedTranscriptDocument save(SignedTranscriptDocument domain) {
         var entity = mapper.toEntity(domain);
-        return mapper.toDomain(jpa.save(entity));
+        return mapper.toDomain(jpa.saveAndFlush(entity));
     }
 
     @Override

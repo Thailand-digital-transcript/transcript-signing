@@ -5,6 +5,7 @@ import com.wpanther.transcript.signing.application.port.out.DocumentStoragePort;
 import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.infrastructure.config.properties.StorageProperties;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -26,7 +27,7 @@ public class S3StorageAdapter implements DocumentStoragePort {
     private final S3Client s3Client;
     private final S3Presigner presigner;
 
-    // Production constructor — Spring calls this; S3Client/Presigner built from properties
+    @Autowired
     public S3StorageAdapter(StorageProperties properties) {
         this.properties = properties;
         var credentials = StaticCredentialsProvider.create(
