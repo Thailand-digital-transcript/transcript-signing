@@ -25,7 +25,7 @@ public abstract class IntegrationTestBase {
     public static final KafkaContainer KAFKA =
             new KafkaContainer(DockerImageName.parse("confluentinc/cp-kafka:7.6.0"));
 
-    static final MinIOContainer MINIO =
+    public static final MinIOContainer MINIO =
             new MinIOContainer(DockerImageName.parse("minio/minio:latest"))
                     .withUserName("minioadmin")
                     .withPassword("minioadmin");

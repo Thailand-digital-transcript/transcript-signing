@@ -46,8 +46,7 @@ class PadesTranscriptSigningServiceTest {
         byte[] pdfBytes = "%PDF-1.7\n...".getBytes();
         // signedAttrsDigestBase64 is the hash of DER(signedAttrs) — what CSC receives
         PadesDigestResult digestResult = new PadesDigestResult(
-                new byte[]{1, 2, 3}, new long[]{0, 100, 164, 500},
-                "signedAttrsDigest==", new byte[]{0x30, 0x00});
+                new byte[]{1, 2, 3}, "signedAttrsDigest==", new byte[]{0x30, 0x00});
         when(padesEmbeddingPort.computeByteRangeDigest(pdfBytes)).thenReturn(digestResult);
         when(cscAuthorizationPort.authorize(eq("cred-001"), eq("signedAttrsDigest=="), eq("")))
                 .thenReturn("sad-token-pdf");
@@ -68,8 +67,7 @@ class PadesTranscriptSigningServiceTest {
         byte[] pdfBytes = "%PDF-1.7\n...".getBytes();
         byte[] signedPdfBytes = "%PDF-1.7\n...signed".getBytes();
         PadesDigestResult digestResult = new PadesDigestResult(
-                pdfBytes, new long[]{0, 100, 164, 500},
-                "signedAttrsDigest==", new byte[]{0x30, 0x00});
+                pdfBytes, "signedAttrsDigest==", new byte[]{0x30, 0x00});
         when(padesEmbeddingPort.computeByteRangeDigest(pdfBytes)).thenReturn(digestResult);
         when(padesEmbeddingPort.embedSignature(digestResult, "sig==", "cert-pem"))
                 .thenReturn(signedPdfBytes);

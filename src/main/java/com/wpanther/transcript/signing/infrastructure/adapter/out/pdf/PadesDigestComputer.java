@@ -64,14 +64,17 @@ public class PadesDigestComputer {
             // out when setSignature is called. The PadesEmbedder re-does the flow
             // (load + addSignature + saveIncrementalForExternalSigning + setSignature)
             // using this same input PDF and the same FIXED_DOCUMENT_ID, so the
-            // resulting byte range and document digest match what we hashed here
-            // and the CSC signature remains valid.
+            // resulting document digest matches what we hashed here and the CSC
+            // signature remains valid.
+            //
+            // Note: the PAdES signature dict's /ByteRange is only finalised in the
+            // PadesEmbedder after setSignature() is called. At this digest phase
+            // the byte range is not yet stable, so we do not propagate it on the
+            // result. The embedder writes the authoritative byte range into the
+            // final signed PDF that is stored and archived.
             byte[] preparedPdfBytes = pdfBytes;
-            int[] byteRangeInts = signature.getByteRange();
-            long[] byteRange = new long[4];
-            for (int i = 0; i < 4; i++) byteRange[i] = byteRangeInts[i];
 
-            return new PadesDigestResult(preparedPdfBytes, byteRange, signedAttrsDigestBase64, encodedSignedAttrs);
+            return new PadesDigestResult(preparedPdfBytes, signedAttrsDigestBase64, encodedSignedAttrs);
         } catch (Exception e) {
             throw new SigningException("PADES_DIGEST_FAILED", "PAdES digest computation failed", e);
         }

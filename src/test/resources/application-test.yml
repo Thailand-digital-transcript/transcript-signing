@@ -1,7 +1,10 @@
 spring:
   datasource:
-    url: jdbc:tc:postgresql:16:///transcript_signing_test
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    # driver-class-name is intentionally omitted: it is inferred from the JDBC URL
+    # by Spring Boot's DataSourceAutoConfiguration. The @DynamicPropertySource
+    # in IntegrationTestBase overrides this URL to point at the real PostgreSQL
+    # container, where the inferred driver (org.postgresql.Driver) is required.
+    url: jdbc:postgresql://placeholder
   jpa:
     hibernate:
       ddl-auto: none
@@ -17,12 +20,10 @@ app:
     endpoint: http://localhost:${minio.port:9001}
   signing:
     max-retries: 3
+  outbox:
+    relay:
+      enabled: false
 
 eureka:
   client:
     enabled: false
-
-app:
-  outbox:
-    relay:
-      enabled: false

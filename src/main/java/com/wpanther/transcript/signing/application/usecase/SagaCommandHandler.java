@@ -58,8 +58,7 @@ public class SagaCommandHandler implements SagaCommandPort {
         // Phase 0: format validation
         if (command.getFormat() == null) {
             log.warn("Signing command missing format field — publishing FAILURE");
-            sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                    command.getCorrelationId(), "Missing or unrecognised format field");
+            publishFailureInTx(command, "Missing or unrecognised format field");
             return;
         }
         SigningFormat format = command.getFormat();
@@ -69,9 +68,13 @@ public class SagaCommandHandler implements SagaCommandPort {
         SignedTranscriptDocument document = repository.findByDocumentId(documentId).orElse(null);
         if (document != null && document.getStatus() == SigningStatus.COMPLETED) {
             log.info("Document already COMPLETED — republishing success reply");
-            sagaReplyPort.publishSuccess(command.getSagaId(), command.getSagaStep(),
-                    command.getCorrelationId(), document.getSignedDocUrl(),
-                    document.getSignedDocSize(), format);
+            final SignedTranscriptDocument completedDoc = document;
+            transactionTemplate.execute(status -> {
+                sagaReplyPort.publishSuccess(command.getSagaId(), command.getSagaStep(),
+                        command.getCorrelationId(), completedDoc.getSignedDocUrl(),
+                        completedDoc.getSignedDocSize(), format);
+                return null;
+            });
             return;
         }
 
@@ -79,8 +82,7 @@ public class SagaCommandHandler implements SagaCommandPort {
         byte[] originalBytes = resolveOriginalBytes(command, format, document);
         if (originalBytes == null) {
             // resolveOriginalBytes already logged the error; surface it to the saga orchestrator
-            sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                    command.getCorrelationId(), "Failed to download PDF from source URL");
+            publishFailureInTx(command, "Failed to download PDF from source URL");
             return;
         }
 
@@ -92,8 +94,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                 orig = documentStoragePort.upload(originalBytes, originalKey);
             } catch (Exception e) {
                 log.error("Phase 2: Failed to upload original document to S3", e);
-                sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                        command.getCorrelationId(), "Pre-signing S3 upload failed: " + e.getMessage());
+                publishFailureInTx(command, "Pre-signing S3 upload failed: " + e.getMessage());
                 return;
             }
 
@@ -114,8 +115,7 @@ public class SagaCommandHandler implements SagaCommandPort {
             });
 
             if (document == null || maxRetriesHit[0]) {
-                sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                        command.getCorrelationId(), "Max retry attempts exceeded");
+                publishFailureInTx(command, "Max retry attempts exceeded");
                 return;
             }
         } else {
@@ -137,8 +137,7 @@ public class SagaCommandHandler implements SagaCommandPort {
             });
 
             if (document == null || maxRetriesHit[0]) {
-                sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                        command.getCorrelationId(), "Max retry attempts exceeded");
+                publishFailureInTx(command, "Max retry attempts exceeded");
                 return;
             }
         }
@@ -163,8 +162,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                     failDoc.markFailed(e.getMessage());
                     return repository.save(failDoc);
                 });
-                sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                        command.getCorrelationId(), "CSC signing failed: " + e.getMessage());
+                publishFailureInTx(command, "CSC signing failed: " + e.getMessage());
                 return;
             }
 
@@ -195,8 +193,7 @@ public class SagaCommandHandler implements SagaCommandPort {
                 failDoc.markFailed(e.getMessage());
                 return repository.save(failDoc);
             });
-            sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
-                    command.getCorrelationId(), "Signature embed/upload failed: " + e.getMessage());
+            publishFailureInTx(command, "Signature embed/upload failed: " + e.getMessage());
             return;
         }
 
@@ -228,8 +225,11 @@ public class SagaCommandHandler implements SagaCommandPort {
         var document = repository.findByDocumentId(command.getDocumentId()).orElse(null);
         if (document == null) {
             log.info("Compensation: no document found for {} — publishing COMPENSATED", command.getDocumentId());
-            sagaReplyPort.publishCompensated(command.getSagaId(), command.getSagaStep(),
-                    command.getCorrelationId());
+            final CompensateTranscriptSigningCommand cmd = command;
+            transactionTemplate.execute(status -> {
+                sagaReplyPort.publishCompensated(cmd.getSagaId(), cmd.getSagaStep(), cmd.getCorrelationId());
+                return null;
+            });
             return;
         }
 
@@ -245,6 +245,21 @@ public class SagaCommandHandler implements SagaCommandPort {
         transactionTemplate.execute(status -> {
             repository.deleteById(doc.getId());
             sagaReplyPort.publishCompensated(cmd.getSagaId(), cmd.getSagaStep(), cmd.getCorrelationId());
+            return null;
+        });
+    }
+
+    /**
+     * Wraps a standalone failure reply in its own transaction. Required because the outbox
+     * adapters are {@code @Transactional(MANDATORY)} — calling them outside an active
+     * transaction triggers {@code IllegalTransactionStateException}.
+     */
+    private void publishFailureInTx(ProcessTranscriptSigningCommand command, String errorMessage) {
+        final String sagaId = command.getSagaId();
+        final var sagaStep = command.getSagaStep();
+        final String correlationId = command.getCorrelationId();
+        transactionTemplate.execute(status -> {
+            sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, errorMessage);
             return null;
         });
     }

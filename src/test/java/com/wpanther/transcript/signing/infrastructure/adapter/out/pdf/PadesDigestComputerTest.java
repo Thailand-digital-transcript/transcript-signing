@@ -22,7 +22,6 @@ class PadesDigestComputerTest {
         assertThat(result.signedAttrsDigestBase64()).isNotBlank();
         assertThat(result.encodedSignedAttrs()).isNotEmpty();
         assertThat(result.preparedPdfBytes()).isNotEmpty();
-        assertThat(result.byteRange()).hasSize(4);
         // signedAttrsDigestBase64 is a valid base64-encoded SHA-256
         byte[] decoded = Base64.getDecoder().decode(result.signedAttrsDigestBase64());
         assertThat(decoded).hasSize(32);

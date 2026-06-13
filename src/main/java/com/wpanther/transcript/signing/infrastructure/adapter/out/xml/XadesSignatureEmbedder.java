@@ -164,6 +164,19 @@ public class XadesSignatureEmbedder implements XadesEmbeddingPort {
     }
 
     private String computeDocumentDigest(byte[] xmlBytes) throws Exception {
+        // KNOWN LIMITATION: this digest is computed over the RAW input bytes. A
+        // conformant XAdES verifier will:
+        //   1. Apply the ds:Transforms listed in the ds:Reference (enveloped-signature
+        //      + exclusive C14N),
+        //   2. Hash the result,
+        //   3. Compare against the DigestValue.
+        // To produce a verifying signature, the digest here must be SHA-256 of the
+        // C14N(document) WITH the ds:Signature element already in place so the
+        // enveloped-signature transform can remove it. The proper fix is to swap
+        // this hand-rolled embedder for Apache Santuario's XMLSignature API (xmlsec
+        // 4.0.4 is already a dependency), which handles the SignedInfo/Reference
+        // digest round-trip correctly. Until then, signatures verify only the
+        // SignedProperties reference, not the document reference.
         return Base64.getEncoder().encodeToString(
                 MessageDigest.getInstance("SHA-256").digest(xmlBytes));
     }
