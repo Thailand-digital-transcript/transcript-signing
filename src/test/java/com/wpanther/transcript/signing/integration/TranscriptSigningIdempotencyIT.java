@@ -67,9 +67,11 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
             assertThat(reply.get().value()).contains("SUCCESS");
         });
 
-        // Wait for the relay to drain the outbox so the COMPLETED state is observable
-        // and any subsequent side-effects would be visible.
-        Thread.sleep(2000);
+        // The Kafka reply is produced only after TX2 commits (COMPLETED in DB), so the
+        // DB is already in COMPLETED state at this point. Reset the WireMock request
+        // journal so second-command CSC invocations are counted from zero — this is the
+        // clean boundary between the two commands without any fixed sleep.
+        wireMock.resetRequests();
 
         // Second command: same document, NEW sagaId and correlationId. The handler
         // should see the existing COMPLETED record and republish a SUCCESS reply
@@ -85,14 +87,16 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
                     Duration.ofSeconds(2));
             assertThat(reply).isPresent();
             assertThat(reply.get().value()).contains("SUCCESS");
-            // Critically, the documentId in the reply confirms it's the same record
+            // documentId in the reply confirms it is the same record, not a new one
             assertThat(reply.get().value()).contains("doc-idem-001");
         });
 
-        // The original PDF and signed PDF should each exist exactly once (no
-        // double-upload on replay). WireMock will register only ONE /sample.pdf
-        // request, which is the strongest crash-safety assertion we can make at
-        // the storage layer.
+        // CSC must not have been called for the replay — the handler short-circuits at
+        // the COMPLETED idempotency check before reaching any CSC port.
+        wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v1/signatures/signHash")));
+        wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v1/credentials/authorize")));
+
+        // S3 objects from the first command must still exist (no re-upload on replay).
         assertThat(minioHelper.objectExists("PDF/doc-idem-001/attempt-0/original.pdf"))
                 .as("Original PDF should be uploaded exactly once on first attempt")
                 .isTrue();
