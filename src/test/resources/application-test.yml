@@ -21,3 +21,8 @@ app:
 eureka:
   client:
     enabled: false
+
+app:
+  outbox:
+    relay:
+      enabled: false

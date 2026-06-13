@@ -5,6 +5,7 @@ import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscAuthorizeRequest;
 import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,7 @@ public class CscAuthorizationAdapter implements CscAuthorizationPort {
 
     @Override
     @CircuitBreaker(name = "csc-authorization")
+    @Retry(name = "csc-authorization")
     public String authorize(String credentialId, String hashBase64, String pin) {
         var request = new CscAuthorizeRequest();
         request.setCredentialID(credentialId);

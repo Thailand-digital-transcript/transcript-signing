@@ -38,6 +38,9 @@ camel:
       brokers: ${KAFKA_BROKERS:localhost:9092}
 
 app:
+  outbox:
+    relay:
+      enabled: ${OUTBOX_RELAY_ENABLED:true}
   kafka:
     topics:
       saga-command-transcript-signing: saga.command.transcript-signing

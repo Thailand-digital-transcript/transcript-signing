@@ -5,6 +5,7 @@ import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscSignHashRequest;
 import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,7 @@ public class CscSignatureAdapter implements CscSignaturePort {
 
     @Override
     @CircuitBreaker(name = "csc-signature")
+    @Retry(name = "csc-signature")
     public String signHash(String hashBase64, String sadToken, String credentialId,
                             String hashAlgorithmOid) {
         var request = new CscSignHashRequest();
