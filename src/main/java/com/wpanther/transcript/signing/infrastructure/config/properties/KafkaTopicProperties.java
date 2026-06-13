@@ -2,15 +2,19 @@ package com.wpanther.transcript.signing.infrastructure.config.properties;
 
 import lombok.Getter;
 import lombok.Setter;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
-/**
- * Minimal stub. Task 11 will replace this with the full @ConfigurationProperties-annotated version.
- */
+@Component
+@ConfigurationProperties(prefix = "app.kafka.topics")
 @Getter
 @Setter
 public class KafkaTopicProperties {
 
-    private String sagaReplyTranscriptSigning;
-    private String transcriptSigned;
-    private String documentArchive;
+    private String sagaCommandTranscriptSigning   = "saga.command.transcript-signing";
+    private String sagaCompensationTranscriptSigning = "saga.compensation.transcript-signing";
+    private String sagaReplyTranscriptSigning     = "saga.reply.transcript-signing";
+    private String transcriptSigned               = "transcript.signed";
+    private String documentArchive                = "document.archive";
+    private String dlq                            = "transcript.signing.dlq";
 }
