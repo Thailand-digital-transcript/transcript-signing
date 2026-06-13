@@ -57,6 +57,43 @@ public class SignedTranscriptDocument {
                 SigningStatus.PENDING, Instant.now());
     }
 
+    /**
+     * Reconstructs a SignedTranscriptDocument from a fully-populated state — used by the
+     * JPA mapper when hydrating an entity loaded from the database. Production code
+     * should normally use {@link #create(String, String, SigningFormat, String, String, long)}.
+     */
+    public static SignedTranscriptDocument rehydrate(SignedTranscriptDocumentId id,
+                                                      String documentId, String documentNumber,
+                                                      SigningFormat format,
+                                                      String originalDocPath, String originalDocUrl,
+                                                      long originalDocSize,
+                                                      String signedDocPath, String signedDocUrl,
+                                                      Long signedDocSize,
+                                                      String transactionId, String pendingSignature,
+                                                      String certificate, String signatureLevel,
+                                                      Instant signatureTimestamp,
+                                                      SigningStatus status, String errorMessage,
+                                                      int retryCount, Instant createdAt,
+                                                      Instant completedAt, Long version) {
+        SignedTranscriptDocument doc = new SignedTranscriptDocument(
+                id, documentId, documentNumber, format,
+                originalDocPath, originalDocUrl, originalDocSize,
+                status, createdAt);
+        doc.signedDocPath = signedDocPath;
+        doc.signedDocUrl = signedDocUrl;
+        doc.signedDocSize = signedDocSize == null ? 0L : signedDocSize;
+        doc.transactionId = transactionId;
+        doc.pendingSignature = pendingSignature;
+        doc.certificate = certificate;
+        doc.signatureLevel = signatureLevel;
+        doc.signatureTimestamp = signatureTimestamp;
+        doc.errorMessage = errorMessage;
+        doc.retryCount = retryCount;
+        doc.completedAt = completedAt;
+        doc.version = version;
+        return doc;
+    }
+
     public void startSigning() {
         if (status != SigningStatus.PENDING && status != SigningStatus.FAILED) {
             throw new SigningException("INVALID_STATE_TRANSITION",
