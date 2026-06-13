@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:16:///transcript_signing_test
+    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+camel:
+  springboot:
+    main-run-controller: false
+
+app:
+  csc:
+    service-url: http://localhost:${wiremock.server.port:8089}
+  storage:
+    endpoint: http://localhost:${minio.port:9001}
+  signing:
+    max-retries: 3
+
+eureka:
+  client:
+    enabled: false
