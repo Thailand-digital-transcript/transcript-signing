@@ -14,10 +14,17 @@ public class CscProperties {
     private String hashAlgorithmOid;
     private String pin;
     private Xades xades = new Xades();
+    private Pades pades = new Pades();
 
     @Getter
     @Setter
     public static class Xades {
+        private String signatureLevel;
+    }
+
+    @Getter
+    @Setter
+    public static class Pades {
         private String signatureLevel;
     }
 }
