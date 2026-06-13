@@ -1,0 +1,43 @@
+package com.wpanther.transcript.signing.infrastructure.adapter.out.csc;
+
+import com.wpanther.transcript.signing.application.port.out.CscSignaturePort;
+import com.wpanther.transcript.signing.domain.model.SigningException;
+import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscSignHashRequest;
+import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Slf4j
+@Component
+@RequiredArgsConstructor
+public class CscSignatureAdapter implements CscSignaturePort {
+
+    private final CscSignHashClient signHashClient;
+
+    @Override
+    @CircuitBreaker(name = "csc-signature")
+    public String signHash(String hashBase64, String sadToken, String credentialId,
+                            String hashAlgorithmOid) {
+        var request = new CscSignHashRequest();
+        request.setCredentialID(credentialId);
+        request.setSAD(sadToken);
+        request.setHash(List.of(hashBase64));
+        request.setHashAlgorithmOID(hashAlgorithmOid);
+        // sha256WithRSAEncryption (PKCS#1 v1.5); override if credential uses RSAPSS or ECDSA
+        request.setSignAlgo("1.2.840.113549.1.1.11");
+        try {
+            var response = signHashClient.signHash(request);
+            if (response.getSignatures() == null || response.getSignatures().isEmpty()) {
+                throw new SigningException("CSC_SIGN_EMPTY", "CSC signHash returned no signatures");
+            }
+            return response.getSignatures().get(0);
+        } catch (FeignException e) {
+            log.error("CSC signHash failed: status={}", e.status(), e);
+            throw new SigningException("CSC_SIGN_FAILED", "CSC signHash failed: " + e.getMessage(), e);
+        }
+    }
+}
