@@ -57,7 +57,8 @@ public abstract class IntegrationTestBase {
 
     /**
      * Base64-encoded DER X.509 certificate (no PEM headers) generated once for all ITs.
-     * PadesCmsBuilder.parseCertificate() and XadesSignatureEmbedder both accept raw DER base64.
+     * PadesCmsBuilder.parseCertificate() and the XAdES signer (SantuarioXadesSigner) both
+     * accept raw DER base64.
      */
     protected static String TEST_CERT_DER_BASE64;
 
