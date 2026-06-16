@@ -26,7 +26,7 @@ The service has **no REST API** — it is driven entirely by Kafka commands and 
 | Messaging / Routing | Apache Camel 4.14.4, Apache Kafka |
 | Persistence | PostgreSQL, Spring Data JPA, Flyway |
 | Object storage | AWS SDK v2 (S3-compatible — MinIO in dev/test) |
-| XML signing | Apache Santuario 4.0.4 (manual DOM) |
+| XML signing | Apache Santuario 4.0.4 (two-pass remote signing) |
 | PDF signing | Apache PDFBox 3.0.6 + BouncyCastle 1.83 |
 | Resilience | Resilience4j |
 | Service discovery | Eureka (optional) |
