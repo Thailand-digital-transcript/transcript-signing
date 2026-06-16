@@ -4,12 +4,13 @@ import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscCredentialInfoRequest;
 import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscCredentialInfoResponse;
 import com.wpanther.transcript.signing.infrastructure.config.properties.CscProperties;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
@@ -18,42 +19,32 @@ public class CscCredentialInfoCache {
 
     private final CscCredentialInfoClient credentialInfoClient;
     private final CscProperties cscProperties;
+    private final Map<String, String> certByCredentialId = new ConcurrentHashMap<>();
 
-    private volatile String certificate;
-
-    @PostConstruct
-    public void init() {
-        try {
-            refresh();
-        } catch (Exception e) {
-            log.warn("Failed to pre-warm CSC credential cache — will retry on first use", e);
-        }
-    }
-
+    /** Existing single-doc API: certificate for the default configured credential. */
     public String getCertificate() {
-        if (certificate == null) {
-            synchronized (this) {
-                if (certificate == null) {
-                    refresh();
-                }
-            }
-        }
-        return certificate;
+        return getCertificate(cscProperties.getCredentialId());
     }
 
-    public void invalidate() {
-        certificate = null;
+    /** Returns (and caches) the leaf certificate for a specific CSC credential. */
+    public String getCertificate(String credentialId) {
+        return certByCredentialId.computeIfAbsent(credentialId, this::fetch);
     }
 
-    private void refresh() {
+    public void invalidate(String credentialId) {
+        certByCredentialId.remove(credentialId);
+    }
+
+    private String fetch(String credentialId) {
         var request = new CscCredentialInfoRequest();
-        request.setCredentialID(cscProperties.getCredentialId());
+        request.setCredentialID(credentialId);
         CscCredentialInfoResponse response = credentialInfoClient.getCredentialInfo(request);
         List<String> certs = response.getCert() != null ? response.getCert().getCertificates() : null;
         if (certs == null || certs.isEmpty()) {
-            throw new SigningException("CSC_CERT_MISSING", "No certificate returned from CSC credential info");
+            throw new SigningException("CSC_CERT_MISSING",
+                    "No certificate returned from CSC credential info for " + credentialId);
         }
-        certificate = certs.get(0);
-        log.info("CSC credential info cached, certificate length={}", certificate.length());
+        log.info("Cached CSC certificate for credentialId={}", credentialId);
+        return certs.get(0);
     }
 }
