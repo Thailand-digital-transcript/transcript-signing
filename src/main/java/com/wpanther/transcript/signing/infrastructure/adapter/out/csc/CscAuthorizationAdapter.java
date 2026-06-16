@@ -40,4 +40,27 @@ public class CscAuthorizationAdapter implements CscAuthorizationPort {
             throw new SigningException("CSC_AUTH_FAILED", "CSC authorization failed: " + e.getMessage(), e);
         }
     }
+
+    @Override
+    @CircuitBreaker(name = "csc-authorization")
+    @Retry(name = "csc-authorization")
+    public String authorize(String credentialId, List<String> hashesBase64, String pin) {
+        var request = new CscAuthorizeRequest();
+        request.setCredentialID(credentialId);
+        request.setNumSignatures(hashesBase64.size());
+        request.setHash(hashesBase64);
+        if (pin != null && !pin.isBlank()) {
+            request.setAuthData(List.of(CscAuthorizeRequest.AuthData.pin(pin)));
+        }
+        try {
+            var response = authorizationClient.authorize(request);
+            if (response.getSad() == null || response.getSad().isBlank()) {
+                throw new SigningException("CSC_AUTH_EMPTY_SAD", "CSC authorize returned empty SAD token");
+            }
+            return response.getSad();
+        } catch (FeignException e) {
+            log.error("CSC authorize failed: status={}, body={}", e.status(), e.contentUTF8(), e);
+            throw new SigningException("CSC_AUTH_FAILED", "CSC authorization failed: " + e.getMessage(), e);
+        }
+    }
 }

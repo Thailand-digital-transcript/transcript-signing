@@ -49,4 +49,19 @@ class CscAuthorizationAdapterTest {
         assertThatThrownBy(() -> adapter.authorize("cred-001", "hash==", null))
                 .isInstanceOf(SigningException.class);
     }
+
+    @Test
+    void authorizeBatch_sendsAllHashesAndNumSignatures() {
+        var resp = new CscAuthorizeResponse();
+        resp.setSad("SAD-XYZ");
+        var captor = org.mockito.ArgumentCaptor.forClass(
+                com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscAuthorizeRequest.class);
+        org.mockito.Mockito.when(authorizationClient.authorize(captor.capture())).thenReturn(resp);
+
+        String sad = adapter.authorize("cred-1", java.util.List.of("H1", "H2"), "1234");
+
+        org.assertj.core.api.Assertions.assertThat(sad).isEqualTo("SAD-XYZ");
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getHash()).containsExactly("H1", "H2");
+        org.assertj.core.api.Assertions.assertThat(captor.getValue().getNumSignatures()).isEqualTo(2);
+    }
 }

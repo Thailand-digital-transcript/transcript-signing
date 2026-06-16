@@ -42,4 +42,31 @@ public class CscSignatureAdapter implements CscSignaturePort {
             throw new SigningException("CSC_SIGN_FAILED", "CSC signHash failed: " + e.getMessage(), e);
         }
     }
+
+    @Override
+    @CircuitBreaker(name = "csc-signature")
+    @Retry(name = "csc-signature")
+    public List<String> signHash(List<String> hashesBase64, String sadToken, String credentialId,
+                                 String hashAlgorithmOid) {
+        var request = new CscSignHashRequest();
+        request.setCredentialID(credentialId);
+        request.setSAD(sadToken);
+        request.setHash(hashesBase64);
+        request.setHashAlgorithmOID(hashAlgorithmOid);
+        request.setSignAlgo("1.2.840.113549.1.1.11"); // sha256WithRSAEncryption (PKCS#1 v1.5)
+        try {
+            var response = signHashClient.signHash(request);
+            if (response.getSignatures() == null
+                    || response.getSignatures().size() != hashesBase64.size()) {
+                throw new SigningException("CSC_SIGN_COUNT_MISMATCH",
+                        "CSC signHash returned " + (response.getSignatures() == null ? 0
+                                : response.getSignatures().size()) + " signatures for "
+                                + hashesBase64.size() + " hashes");
+            }
+            return response.getSignatures();
+        } catch (FeignException e) {
+            log.error("CSC signHash failed: status={}", e.status(), e);
+            throw new SigningException("CSC_SIGN_FAILED", "CSC signHash failed: " + e.getMessage(), e);
+        }
+    }
 }
