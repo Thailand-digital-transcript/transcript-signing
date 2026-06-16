@@ -62,6 +62,20 @@ public abstract class IntegrationTestBase {
      */
     protected static String TEST_CERT_DER_BASE64;
 
+    /**
+     * Convenience accessor for the X509Certificate behind {@link #TEST_CERT_DER_BASE64}.
+     * Tests that need to verify signatures produced by the WireMock CSC stub use this
+     * so they can call {@code cscCert.getPublicKey()} on the same key the stub signs with.
+     */
+    protected static X509Certificate cscCert() {
+        X509Certificate cert = CscSignHashResponseTransformer.getTestCertificate();
+        if (cert == null) {
+            throw new IllegalStateException(
+                    "CSC test certificate not initialised — IntegrationTestBase.@BeforeAll did not run");
+        }
+        return cert;
+    }
+
     static final String BUCKET = "signed-transcripts";
 
     @BeforeAll
@@ -72,7 +86,9 @@ public abstract class IntegrationTestBase {
         // WireMock is shared across all test classes (Spring context is cached with its
         // port). Only create it once; subsequent @BeforeAll calls reuse the running instance.
         if (wireMock == null || !wireMock.isRunning()) {
-            wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
+            wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig()
+                    .dynamicPort()
+                    .extensions(new CscSignHashResponseTransformer.Impl()));
             wireMock.start();
         }
         if (TEST_CERT_DER_BASE64 == null) {
@@ -104,6 +120,10 @@ public abstract class IntegrationTestBase {
             X509Certificate cert = new JcaX509CertificateConverter()
                     .setProvider(BouncyCastleProvider.PROVIDER_NAME)
                     .getCertificate(holder);
+            // Hand the same key + cert to the WireMock signHash transformer so it can sign
+            // the digest with the matching private key — without this the IT's
+            // assertSignedXmlVerifies() would assert against the wrong public key.
+            CscSignHashResponseTransformer.setTestKeyMaterial(kp, cert);
             return Base64.getEncoder().encodeToString(cert.getEncoded());
         } catch (Exception e) {
             throw new RuntimeException("Failed to generate test certificate", e);

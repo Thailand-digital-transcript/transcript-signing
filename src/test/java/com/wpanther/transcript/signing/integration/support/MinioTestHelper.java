@@ -2,8 +2,10 @@ package com.wpanther.transcript.signing.integration.support;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 
@@ -46,4 +48,16 @@ public class MinioTestHelper {
             return false;
         }
     }
+
+    /**
+     * Downloads the object at {@code key} and returns its raw bytes. Caller is responsible
+     * for decoding (e.g. UTF-8 for XML) — this helper returns the bytes unchanged.
+     */
+    public byte[] getObjectBytes(String key) {
+        return s3.getObject(GetObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build(), ResponseTransformer.toBytes()).asByteArray();
+    }
 }
+
