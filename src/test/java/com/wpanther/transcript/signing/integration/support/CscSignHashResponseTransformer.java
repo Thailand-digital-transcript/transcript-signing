@@ -20,10 +20,13 @@ import java.util.Base64;
 /**
  * Test-only stand-in for the CSC signHash endpoint. Wired into the WireMock server as a
  * per-stub transformer (see {@link #NAME}). For every signHash request, it parses the JSON
- * body, decodes {@code hash[0]} (a base64 SHA-256 digest), reconstructs the PKCS#1 v1.5
- * DigestInfo for SHA-256, and signs it with the test RSA private key using
+ * body, decodes every base64 SHA-256 digest in the {@code hash} array, reconstructs the
+ * PKCS#1 v1.5 DigestInfo for SHA-256, and signs it with the test RSA private key using
  * {@code NONEwithRSA}. The matching certificate is exposed via {@link #getTestCertificate()}
  * so the IT can assert the embedded XML signature verifies.
+ *
+ * <p>A 1-element request yields a 1-element response, so the 1A single-hash ITs keep
+ * working; multi-hash (batch) requests are signed element-by-element in order.
  *
  * <p>The test {@link KeyPair} / {@link X509Certificate} are written into volatile static
  * fields by {@link IntegrationTestBase#startContainers()}, which runs once per JVM. The
@@ -72,9 +75,15 @@ public final class CscSignHashResponseTransformer {
             }
             try {
                 String body = request.getBodyAsString();
-                String hashBase64 = extractFirstHashBase64(body);
-                byte[] signature = signDigestBase64(hashBase64);
-                String responseJson = "{\"signatures\":[\"" + Base64.getEncoder().encodeToString(signature) + "\"]}";
+                java.util.List<String> hashes = extractHashesBase64(body);
+                StringBuilder sigs = new StringBuilder("[");
+                for (int i = 0; i < hashes.size(); i++) {
+                    byte[] sig = signDigestBase64(hashes.get(i));
+                    if (i > 0) sigs.append(',');
+                    sigs.append('"').append(Base64.getEncoder().encodeToString(sig)).append('"');
+                }
+                sigs.append(']');
+                String responseJson = "{\"signatures\":" + sigs + "}";
                 return Response.response()
                         .status(200)
                         .body(responseJson)
@@ -91,13 +100,17 @@ public final class CscSignHashResponseTransformer {
         }
     }
 
-    private static String extractFirstHashBase64(String json) throws Exception {
+    private static java.util.List<String> extractHashesBase64(String json) throws Exception {
         JsonNode root = MAPPER.readTree(json);
         JsonNode hashNode = root.get("hash");
         if (hashNode == null || !hashNode.isArray() || hashNode.isEmpty()) {
             throw new IllegalStateException("signHash request missing 'hash' array");
         }
-        return hashNode.get(0).asText();
+        java.util.List<String> out = new java.util.ArrayList<>(hashNode.size());
+        for (int i = 0; i < hashNode.size(); i++) {
+            out.add(hashNode.get(i).asText());
+        }
+        return out;
     }
 
     /**

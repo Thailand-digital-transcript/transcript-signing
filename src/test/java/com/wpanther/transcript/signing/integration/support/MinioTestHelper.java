@@ -2,12 +2,14 @@ package com.wpanther.transcript.signing.integration.support;
 
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.core.sync.ResponseTransformer;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.net.URI;
 
@@ -58,6 +60,18 @@ public class MinioTestHelper {
                 .bucket(bucket)
                 .key(key)
                 .build(), ResponseTransformer.toBytes()).asByteArray();
+    }
+
+    /**
+     * Uploads {@code bytes} to {@code key} in the configured bucket. Used by tests that
+     * pre-seed original documents (e.g. batch signing) before publishing a command that
+     * references them by storage key.
+     */
+    public void putObject(String key, byte[] bytes) {
+        s3.putObject(PutObjectRequest.builder()
+                .bucket(bucket)
+                .key(key)
+                .build(), RequestBody.fromBytes(bytes));
     }
 }
 
