@@ -29,7 +29,9 @@ public class SignedTranscriptDocumentMapper {
                 entity.getRetryCount(),
                 entity.getCreatedAt(),
                 entity.getCompletedAt(),
-                entity.getVersion());
+                entity.getVersion(),
+                entity.getSigId(),
+                entity.getSigningTime());
     }
 
     public SignedTranscriptDocumentEntity toEntity(SignedTranscriptDocument domain) {
@@ -47,6 +49,8 @@ public class SignedTranscriptDocumentMapper {
         entity.setTransactionId(domain.getTransactionId());
         entity.setPendingSignature(domain.getPendingSignature());
         entity.setCertificate(domain.getCertificate());
+        entity.setSigId(domain.getSigId());
+        entity.setSigningTime(domain.getSigningTime());
         entity.setSignatureLevel(domain.getSignatureLevel());
         entity.setSignatureTimestamp(domain.getSignatureTimestamp());
         entity.setStatus(domain.getStatus());

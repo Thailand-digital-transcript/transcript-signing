@@ -172,7 +172,9 @@ public class SagaCommandHandler implements SagaCommandPort {
                 checkpointDoc.saveTransactionCheckpoint(
                         signHashFinal.transactionId(),
                         signHashFinal.pendingSignature(),
-                        signHashFinal.certificate());
+                        signHashFinal.certificate(),
+                        null,
+                        null);
                 return repository.save(checkpointDoc);
             });
         }

@@ -302,7 +302,7 @@ class SagaCommandHandlerTest {
         var doc = SignedTranscriptDocument.create(docId, "TH-2026-001", SigningFormat.XML,
                 "XML/doc-001/attempt-0/original.xml", "http://orig", 100L);
         doc.startSigning();
-        doc.saveTransactionCheckpoint("txn-001", "stored-sig", "stored-cert");
+        doc.saveTransactionCheckpoint("txn-001", "stored-sig", "stored-cert", null, null);
         return doc;
     }
 

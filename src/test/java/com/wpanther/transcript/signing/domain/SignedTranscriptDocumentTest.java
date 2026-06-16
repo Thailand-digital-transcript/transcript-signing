@@ -79,10 +79,25 @@ class SignedTranscriptDocumentTest {
     void saveTransactionCheckpoint_persistsTransactionIdAndPendingSignature() {
         var doc = pendingDoc();
         doc.startSigning();
-        doc.saveTransactionCheckpoint("txn-123", "base64sig==", "cert-pem");
+        doc.saveTransactionCheckpoint("txn-123", "base64sig==", "cert-pem", null, null);
         assertThat(doc.getTransactionId()).isEqualTo("txn-123");
         assertThat(doc.getPendingSignature()).isEqualTo("base64sig==");
         assertThat(doc.getCertificate()).isEqualTo("cert-pem");
+    }
+
+    @org.junit.jupiter.api.Test
+    void saveTransactionCheckpoint_persistsXadesSigningParams() {
+        var doc = com.wpanther.transcript.signing.domain.model.SignedTranscriptDocument.create(
+                "DOC-1", "NUM-1",
+                com.wpanther.transcript.signing.domain.model.SigningFormat.XML,
+                "path", "url", 10L);
+        doc.startSigning();
+        java.time.Instant t = java.time.Instant.parse("2026-06-16T10:00:00Z");
+
+        doc.saveTransactionCheckpoint("tx-1", "sigval", "certpem", "Sig-1", t);
+
+        org.assertj.core.api.Assertions.assertThat(doc.getSigId()).isEqualTo("Sig-1");
+        org.assertj.core.api.Assertions.assertThat(doc.getSigningTime()).isEqualTo(t);
     }
 
     @Test

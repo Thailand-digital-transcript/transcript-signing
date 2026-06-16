@@ -20,6 +20,8 @@ public class SignedTranscriptDocument {
     private String transactionId;
     private String pendingSignature;
     private String certificate;
+    private String sigId;
+    private Instant signingTime;
     private String signatureLevel;
     private Instant signatureTimestamp;
 
@@ -74,7 +76,8 @@ public class SignedTranscriptDocument {
                                                       Instant signatureTimestamp,
                                                       SigningStatus status, String errorMessage,
                                                       int retryCount, Instant createdAt,
-                                                      Instant completedAt, Long version) {
+                                                      Instant completedAt, Long version,
+                                                      String sigId, Instant signingTime) {
         SignedTranscriptDocument doc = new SignedTranscriptDocument(
                 id, documentId, documentNumber, format,
                 originalDocPath, originalDocUrl, originalDocSize,
@@ -91,6 +94,8 @@ public class SignedTranscriptDocument {
         doc.retryCount = retryCount;
         doc.completedAt = completedAt;
         doc.version = version;
+        doc.sigId = sigId;
+        doc.signingTime = signingTime;
         return doc;
     }
 
@@ -125,10 +130,12 @@ public class SignedTranscriptDocument {
     }
 
     public void saveTransactionCheckpoint(String transactionId, String pendingSignature,
-                                           String certificate) {
+                                           String certificate, String sigId, Instant signingTime) {
         this.transactionId = transactionId;
         this.pendingSignature = pendingSignature;
         this.certificate = certificate;
+        this.sigId = sigId;
+        this.signingTime = signingTime;
     }
 
     public boolean isMaxRetriesExceeded(int maxRetries) {
@@ -148,6 +155,8 @@ public class SignedTranscriptDocument {
     public String getTransactionId()                  { return transactionId; }
     public String getPendingSignature()               { return pendingSignature; }
     public String getCertificate()                    { return certificate; }
+    public String getSigId()                          { return sigId; }
+    public Instant getSigningTime()                   { return signingTime; }
     public String getSignatureLevel()                 { return signatureLevel; }
     public Instant getSignatureTimestamp()            { return signatureTimestamp; }
     public SigningStatus getStatus()                  { return status; }

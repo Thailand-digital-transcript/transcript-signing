@@ -60,6 +60,12 @@ public class SignedTranscriptDocumentEntity {
     @Column(name = "certificate", columnDefinition = "TEXT")
     private String certificate;
 
+    @Column(name = "sig_id", length = 100)
+    private String sigId;
+
+    @Column(name = "signing_time")
+    private Instant signingTime;
+
     @Column(name = "signature_level", length = 50)
     private String signatureLevel;
 
