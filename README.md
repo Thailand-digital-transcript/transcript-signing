@@ -77,6 +77,7 @@ All topics are configurable under `app.kafka.topics` (defaults shown).
 | Topic | Command | Key fields |
 |-------|---------|-----------|
 | `saga.command.transcript-signing` | `ProcessTranscriptSigningCommand` | `sagaId`, `sagaStep`, `correlationId`, `documentId`, `documentNumber`, `format` (`XML`/`PDF`), `xmlContent`, `pdfUrl` |
+| `saga.command.transcript-signing.batch` | `BatchSigningCommand` | `sagaId`, `sagaStep`, `correlationId`, `batchId`, `signerRole` (`REGISTRAR`/`DEAN`/`SEAL`), `format`, `items[]` (each `documentId`/`documentNumber`/`storageKey`) |
 | `saga.compensation.transcript-signing` | `CompensateTranscriptSigningCommand` | `sagaId`, `sagaStep`, `correlationId`, `documentId` |
 
 ### Outbound (produced via outbox relay)
@@ -90,12 +91,52 @@ All topics are configurable under `app.kafka.topics` (defaults shown).
 
 ### Storage layout
 
-Signed artifacts are written to S3 under:
+Single-doc signed artifacts are written to S3 under:
 
 ```
 {FORMAT}/{documentId}/attempt-{retryCount}/original.{ext}
 {FORMAT}/{documentId}/attempt-{retryCount}/signed.{ext}
 ```
+
+Batch signed artifacts are written to S3 under:
+
+```
+{FORMAT}/{documentId}/orig.xml                          ← pre-uploaded by the orchestrator
+{FORMAT}/{batchId}/{documentId}/signed.xml              ← produced by BatchSigningCommandHandler
+```
+
+Batch command consumers must pre-upload each item's original XML to its `storageKey` before publishing the `BatchSigningCommand`. The handler never re-uploads originals.
+
+---
+
+## Batch signing (1B)
+
+For multi-document approval workflows (e.g. a registrar signing 50 transcripts in one batch), a dedicated batch command lets the service issue **one** CSC `authorize` + **one** multi-hash `signHash` per batch, with the per-credential CSC identity selected by `signerRole`.
+
+### Selecting a CSC credential
+
+`signerRole` (`REGISTRAR` / `DEAN` / `SEAL`) maps to a per-role CSC credential via `app.csc.credentials.{REGISTRAR,DEAN,SEAL}` (in `application.yml`). The application-layer handler resolves the credential through the `SignerCredentialResolver` port, so no infra-config import leaks into the domain. Each batch handler run uses exactly one role's credentials end-to-end.
+
+### One multi-hash CSC call per batch
+
+The handler builds `(item, sigId, signingTime, digest)` tuples for every item needing a fresh signature, then issues a single `cscAuthorizationPort.authorize(credentialId, hashes, pin)` + a single `cscSignaturePort.signHash(hashes, sad, credentialId, oid)`. The CSC returns one `signatures[]` array index-aligned to the inputs — no per-item HSM round-trips.
+
+### Item-level idempotency
+
+`BatchSigningJob` is keyed by `correlationId`. Each `BatchSigningItem` carries its own `sigId`/`signingTime`/`pendingSignature`/status. A re-delivered command:
+
+- for a `COMPLETED` job → republishes the reply without touching CSC;
+- for a `SIGNING` job → re-signs only items where `!isSigned() && !hasSignature()` (i.e. items not yet checkpointed), so a crash between `signHash` and the embed loop never re-bills the HSM;
+- never overwrites an item's stored signed document in S3 once that item is in `SIGNED` state.
+
+### Reply event
+
+`BatchSigningReplyEvent` is published on `saga.reply.transcript-signing` (the same reply topic as single-doc, partitioned by `sagaId`). The top-level `ReplyStatus` is `SUCCESS` iff every item reached `SIGNED`, otherwise `FAILURE` — but the per-item `items[]` list is always populated so the orchestrator can mark/advance survivors and re-emit only the failed items.
+
+### What is not yet implemented
+
+- **PDF (PAdES) batch signing** — deferred to the Plan 2 PDF integration. The handler shape is identical with `format=PDF` and a `PadesEmbeddingPort` instead of `XadesPreparePort`.
+- **Batch compensation** — deferred to the Plan 3 orchestrator work. The single-doc compensation flow is unchanged.
 
 ---
 
@@ -149,6 +190,6 @@ Database schema is managed by Flyway migrations in `src/main/resources/db/migrat
 ## Testing
 
 - **Unit tests** (`*Test`) — fast, mock-based; cover the domain model, command handler branches, and adapter logic.
-- **Integration tests** (`*IT`, run under `-Pintegration`) — end-to-end through real Kafka/Postgres/MinIO containers with WireMock standing in for the CSC API. Cover the happy paths (XML + PDF), idempotent replay, and compensation.
+- **Integration tests** (`*IT`, run under `-Pintegration`) — end-to-end through real Kafka/Postgres/MinIO containers with WireMock standing in for the CSC API. Cover the happy paths (XML + PDF), idempotent replay, batch signing, batch resume, and compensation.
 
-Integration tests share containers across classes and Kafka topics are never purged, so test assertions match on a unique `sagaId`/`documentId` rather than reading the first available record.
+Integration tests share containers across classes and Kafka topics are never purged, so test assertions match on a unique `sagaId`/`documentId` rather than reading the first available record. The batch ITs (`BatchSigningPipelineIT`, `BatchSigningResumeIT`) use the pre-seed pattern (no `@SpyBean`, no context fork) to test item-level idempotency without the competing-consumer trap.
