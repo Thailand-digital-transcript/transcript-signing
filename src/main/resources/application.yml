@@ -44,6 +44,7 @@ app:
   kafka:
     topics:
       saga-command-transcript-signing: saga.command.transcript-signing
+      saga-command-transcript-signing-batch: saga.command.transcript-signing.batch
       saga-compensation-transcript-signing: saga.compensation.transcript-signing
       saga-reply-transcript-signing: saga.reply.transcript-signing
       transcript-signed: transcript.signed

@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 public class KafkaTopicProperties {
 
     private String sagaCommandTranscriptSigning   = "saga.command.transcript-signing";
+    private String sagaCommandTranscriptSigningBatch = "saga.command.transcript-signing.batch";
     private String sagaCompensationTranscriptSigning = "saga.compensation.transcript-signing";
     private String sagaReplyTranscriptSigning     = "saga.reply.transcript-signing";
     private String transcriptSigned               = "transcript.signed";
