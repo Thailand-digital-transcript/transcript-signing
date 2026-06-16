@@ -31,7 +31,8 @@ public class PadesTranscriptSigningService {
                 cscProperties.getCredentialId(),
                 cscProperties.getHashAlgorithmOid());
         String certificate = credentialInfoCache.getCertificate();
-        return new SignHashResult(UUID.randomUUID().toString(), signatureBase64, certificate);
+        // PAdES does not use the two-pass prepare/embed seam; sigId/signingTime are N/A for PDF
+        return new SignHashResult(UUID.randomUUID().toString(), signatureBase64, certificate, null, null);
     }
 
     public SigningResult embedAndUpload(byte[] pdfBytes, String pendingSignature,

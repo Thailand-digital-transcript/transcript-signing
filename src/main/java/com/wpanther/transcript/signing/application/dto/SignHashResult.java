@@ -1,3 +1,6 @@
 package com.wpanther.transcript.signing.application.dto;
 
-public record SignHashResult(String transactionId, String pendingSignature, String certificate) {}
+import java.time.Instant;
+
+public record SignHashResult(String transactionId, String pendingSignature, String certificate,
+                             String sigId, Instant signingTime) {}

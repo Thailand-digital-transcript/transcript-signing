@@ -89,8 +89,9 @@ class SagaCommandHandlerTest {
         doAnswer(inv -> inv.getArgument(0)).when(repository).save(any());
         byte[] xmlBytes = "<xml/>".getBytes();
         lenient().when(documentStoragePort.downloadByKey("XML/doc-001/attempt-0/original.xml")).thenReturn(xmlBytes);
+        Instant persistedSigningTime = Instant.parse("2026-06-16T10:00:00Z");
         when(xadesSigningService.embedAndUpload(any(), eq("stored-sig"), eq("stored-cert"),
-                eq("doc-001"), eq(0)))
+                eq("doc-001"), eq(0), eq("Sig-stored-1"), eq(persistedSigningTime)))
                 .thenReturn(new SigningResult("XML/doc-001/attempt-0/signed.xml",
                         "http://url/signed.xml", 500L, "XAdES-BASELINE-B", Instant.now()));
         var command = signingCommand("doc-001", SigningFormat.XML, "<xml/>", null);
@@ -99,7 +100,7 @@ class SagaCommandHandlerTest {
 
         verify(xadesSigningService, never()).computeAndSign(any());
         verify(xadesSigningService).embedAndUpload(any(), eq("stored-sig"), eq("stored-cert"),
-                eq("doc-001"), eq(0));
+                eq("doc-001"), eq(0), eq("Sig-stored-1"), eq(persistedSigningTime));
     }
 
     // Phase 3: Max retries
@@ -125,9 +126,11 @@ class SagaCommandHandlerTest {
                 .thenReturn(originalStorage);
         var newDoc = pendingDoc("doc-001", SigningFormat.XML, originalStorage);
         doAnswer(inv -> inv.getArgument(0)).when(repository).save(any());
+        Instant signingTime = Instant.parse("2026-06-16T10:00:00Z");
         when(xadesSigningService.computeAndSign(xmlBytes))
-                .thenReturn(new SignHashResult("txn-001", "sig==", "cert-pem"));
-        when(xadesSigningService.embedAndUpload(xmlBytes, "sig==", "cert-pem", "doc-001", 0))
+                .thenReturn(new SignHashResult("txn-001", "sig==", "cert-pem", "Sig-1", signingTime));
+        when(xadesSigningService.embedAndUpload(xmlBytes, "sig==", "cert-pem", "doc-001", 0,
+                "Sig-1", signingTime))
                 .thenReturn(new SigningResult("XML/doc-001/attempt-0/signed.xml",
                         "http://signed", 999L, "XAdES-BASELINE-B", Instant.now()));
         var command = signingCommand("doc-001", SigningFormat.XML, "<xml/>", null);
@@ -210,10 +213,11 @@ class SagaCommandHandlerTest {
                 .thenReturn(new StorageResult("XML/doc-eb/attempt-0/original.xml",
                         "http://o", xmlBytes.length));
         doAnswer(inv -> inv.getArgument(0)).when(repository).save(any());
+        Instant signingTime = Instant.parse("2026-06-16T10:00:00Z");
         when(xadesSigningService.computeAndSign(xmlBytes))
-                .thenReturn(new SignHashResult("txn", "sig", "cert"));
+                .thenReturn(new SignHashResult("txn", "sig", "cert", "Sig-1", signingTime));
         when(xadesSigningService.embedAndUpload(eq(xmlBytes), eq("sig"), eq("cert"),
-                eq("doc-eb"), eq(0)))
+                eq("doc-eb"), eq(0), eq("Sig-1"), eq(signingTime)))
                 .thenThrow(new RuntimeException("embed boom"));
         var command = signingCommand("doc-eb", SigningFormat.XML, "<xml/>", null);
 
@@ -302,7 +306,8 @@ class SagaCommandHandlerTest {
         var doc = SignedTranscriptDocument.create(docId, "TH-2026-001", SigningFormat.XML,
                 "XML/doc-001/attempt-0/original.xml", "http://orig", 100L);
         doc.startSigning();
-        doc.saveTransactionCheckpoint("txn-001", "stored-sig", "stored-cert", null, null);
+        doc.saveTransactionCheckpoint("txn-001", "stored-sig", "stored-cert",
+                "Sig-stored-1", Instant.parse("2026-06-16T10:00:00Z"));
         return doc;
     }
 

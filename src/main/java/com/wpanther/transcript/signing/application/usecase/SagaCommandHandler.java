@@ -147,7 +147,9 @@ public class SagaCommandHandler implements SagaCommandPort {
             signHashResult = new SignHashResult(
                     document.getTransactionId(),
                     document.getPendingSignature(),
-                    document.getCertificate());
+                    document.getCertificate(),
+                    document.getSigId(),
+                    document.getSigningTime());
         } else {
             try {
                 signHashResult = format == SigningFormat.XML
@@ -173,8 +175,8 @@ public class SagaCommandHandler implements SagaCommandPort {
                         signHashFinal.transactionId(),
                         signHashFinal.pendingSignature(),
                         signHashFinal.certificate(),
-                        null,
-                        null);
+                        signHashFinal.sigId(),
+                        signHashFinal.signingTime());
                 return repository.save(checkpointDoc);
             });
         }
@@ -184,7 +186,8 @@ public class SagaCommandHandler implements SagaCommandPort {
         try {
             signingResult = format == SigningFormat.XML
                     ? xadesSigningService.embedAndUpload(originalBytes, signHashResult.pendingSignature(),
-                            signHashResult.certificate(), documentId, document.getRetryCount())
+                            signHashResult.certificate(), documentId, document.getRetryCount(),
+                            signHashResult.sigId(), signHashResult.signingTime())
                     : padesSigningService.embedAndUpload(originalBytes, signHashResult.pendingSignature(),
                             signHashResult.certificate(), documentId, document.getRetryCount());
         } catch (Exception e) {
