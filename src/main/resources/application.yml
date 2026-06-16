@@ -58,6 +58,16 @@ app:
     credential-id: ${CSC_CREDENTIAL_ID:default-credential}
     pin: ${CSC_PIN:}
     hash-algorithm-oid: ${CSC_HASH_ALGORITHM_OID:2.16.840.1.101.3.4.2.1}
+    credentials:
+      REGISTRAR:
+        credential-id: ${CSC_REGISTRAR_CREDENTIAL_ID:${app.csc.credential-id}}
+        pin: ${CSC_REGISTRAR_PIN:${app.csc.pin}}
+      DEAN:
+        credential-id: ${CSC_DEAN_CREDENTIAL_ID:${app.csc.credential-id}}
+        pin: ${CSC_DEAN_PIN:${app.csc.pin}}
+      SEAL:
+        credential-id: ${CSC_SEAL_CREDENTIAL_ID:${app.csc.credential-id}}
+        pin: ${CSC_SEAL_PIN:${app.csc.pin}}
     xades:
       signature-level: ${XADES_SIGNATURE_LEVEL:XAdES-BASELINE-B}
     pades:
