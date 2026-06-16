@@ -39,6 +39,40 @@ public class KafkaTestHelper {
     }
 
     /**
+     * Returns ALL records on {@code topic} whose value contains {@code mustContain} (or all
+     * records if {@code mustContain} is null), polling until {@code timeout} elapses with no
+     * new matching records. Useful when a single saga/key produces multiple replies over time
+     * (e.g. a FAILURE then later SUCCESS on redelivery) and the test needs to assert on the
+     * latest state rather than the first match.
+     */
+    public java.util.List<ConsumerRecord<String, String>> pollForAll(
+            String topic, Duration timeout, String mustContain) {
+        java.util.List<ConsumerRecord<String, String>> matches = new java.util.ArrayList<>();
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "test-consumer-" + UUID.randomUUID());
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(List.of(topic));
+            long deadline = System.currentTimeMillis() + timeout.toMillis();
+            long lastMatchAt = 0L;
+            do {
+                var records = consumer.poll(Duration.ofMillis(500));
+                for (ConsumerRecord<String, String> record : records) {
+                    if (mustContain == null || record.value().contains(mustContain)) {
+                        matches.add(record);
+                        lastMatchAt = System.currentTimeMillis();
+                    }
+                }
+            } while (System.currentTimeMillis() < deadline
+                    && (lastMatchAt == 0L || System.currentTimeMillis() - lastMatchAt < 2_000));
+        }
+        return matches;
+    }
+
+    /**
      * Reads from the beginning of {@code topic} and returns the first record whose value contains
      * {@code mustContain}, or any record if {@code mustContain} is null. Integration test topics are
      * shared (and never purged) across test classes, so a fresh consumer group reading from earliest

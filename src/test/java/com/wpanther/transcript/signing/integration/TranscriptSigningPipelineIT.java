@@ -76,6 +76,8 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
                     .isTrue();
         });
         byte[] signedXml = minioHelper.getObjectBytes(signedKey);
+        // TEMP DEBUG
+        java.nio.file.Files.write(java.nio.file.Paths.get("/tmp/signed-happy.xml"), signedXml);
         assertSignedXmlVerifies(signedXml, cscCert());
     }
 

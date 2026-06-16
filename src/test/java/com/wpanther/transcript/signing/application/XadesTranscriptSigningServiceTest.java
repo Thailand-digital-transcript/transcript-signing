@@ -70,6 +70,27 @@ class XadesTranscriptSigningServiceTest {
     }
 
     @Test
+    void computeAndSign_signingTimeHasMillisecondPrecision() {
+        // Guards the truncatedTo(MILLIS) fix: signingTime is persisted to a TIMESTAMPTZ column
+        // (microsecond precision) at the TX1.5 checkpoint and re-fed into embed on resume. If it
+        // carried sub-millisecond (nanosecond) precision from Instant.now(), the DB round-trip
+        // would silently alter it, producing a different SignedInfo and a non-verifying signature.
+        byte[] xmlBytes = "<transcript/>".getBytes();
+        when(credentialInfoCache.getCertificate()).thenReturn("CERTPEM");
+        when(xadesPreparePort.prepare(eq(xmlBytes), eq("CERTPEM"), any(Instant.class), anyString()))
+                .thenReturn(new XadesPreparation("SI_DIGEST", new byte[]{1}));
+        when(cscAuthorizationPort.authorize("cred-001", "SI_DIGEST", "1234")).thenReturn("SAD");
+        when(cscSignaturePort.signHash(eq("SI_DIGEST"), eq("SAD"),
+                eq("cred-001"), eq("2.16.840.1.101.3.4.2.1"))).thenReturn("SIGVAL");
+
+        SignHashResult result = service.computeAndSign(xmlBytes);
+
+        assertThat(result.signingTime().getNano() % 1_000_000)
+                .as("signingTime must be truncated to millis to survive the TIMESTAMPTZ round-trip")
+                .isZero();
+    }
+
+    @Test
     void embedAndUpload_usesCheckpointedParams() {
         byte[] xmlBytes = "<transcript/>".getBytes();
         byte[] signedBytes = "<signed/>".getBytes();

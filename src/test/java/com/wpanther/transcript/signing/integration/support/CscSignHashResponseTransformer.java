@@ -52,6 +52,15 @@ public final class CscSignHashResponseTransformer {
         return testCertificate;
     }
 
+    /**
+     * Produces the base64 CSC signature for a given base64 SHA-256 digest — identical to what the
+     * signHash stub returns over the wire. Used by tests that pre-seed a TX1.5 checkpoint row so
+     * the stored {@code pending_signature} matches what a real CSC call would have produced.
+     */
+    public static String signDigest(String hashBase64) throws Exception {
+        return Base64.getEncoder().encodeToString(signDigestBase64(hashBase64));
+    }
+
     /** Transformer implementation registered with WireMock via {@code extensions(...)}. */
     public static class Impl extends ResponseTransformer {
 

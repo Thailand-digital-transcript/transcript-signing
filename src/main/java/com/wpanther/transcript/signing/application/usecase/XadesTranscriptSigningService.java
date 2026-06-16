@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 @Service
@@ -27,7 +28,13 @@ public class XadesTranscriptSigningService {
     public SignHashResult computeAndSign(byte[] xmlBytes) {
         String certificate = credentialInfoCache.getCertificate();
         String sigId = "Sig-" + UUID.randomUUID();
-        Instant signingTime = Instant.now();
+        // Truncate to milliseconds: the signingTime is embedded in the xades:SigningTime
+        // element and signed as part of C14N(SignedInfo). The same value is persisted at the
+        // TX1.5 checkpoint and MUST round-trip through PostgreSQL TIMESTAMPTZ (microsecond
+        // precision) byte-for-byte so embed on resume reproduces the exact signed bytes.
+        // Instant.now() carries nanoseconds, which would silently truncate on persist and
+        // invalidate the signature on resume.
+        Instant signingTime = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
         XadesPreparation prep = xadesPreparePort.prepare(xmlBytes, certificate, signingTime, sigId);
         String sadToken = cscAuthorizationPort.authorize(
