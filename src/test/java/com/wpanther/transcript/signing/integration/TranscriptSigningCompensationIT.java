@@ -1,7 +1,7 @@
 package com.wpanther.transcript.signing.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
 import com.wpanther.transcript.signing.application.dto.event.CompensateTranscriptSigningCommand;
 import com.wpanther.transcript.signing.infrastructure.config.properties.KafkaTopicProperties;
 import com.wpanther.transcript.signing.integration.support.IntegrationTestBase;

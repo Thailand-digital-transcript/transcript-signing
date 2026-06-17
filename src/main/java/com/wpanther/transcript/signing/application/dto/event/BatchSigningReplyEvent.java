@@ -1,8 +1,8 @@
 package com.wpanther.transcript.signing.application.dto.event;
 
-import com.wpanther.saga.domain.enums.ReplyStatus;
-import com.wpanther.saga.domain.enums.SagaStep;
-import com.wpanther.saga.domain.model.SagaReply;
+import com.wpanther.transcript.saga.domain.enums.ReplyStatus;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.model.SagaReply;
 
 import java.util.List;
 

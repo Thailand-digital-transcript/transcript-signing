@@ -1,6 +1,6 @@
 package com.wpanther.transcript.signing.application.port.out;
 
-import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
 import com.wpanther.transcript.signing.application.dto.event.BatchSigningReplyEvent.ItemResult;
 
 import java.util.List;

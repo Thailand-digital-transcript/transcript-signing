@@ -1,7 +1,7 @@
 package com.wpanther.transcript.signing.integration;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
 import com.wpanther.transcript.signing.application.dto.event.BatchSigningCommand;
 import com.wpanther.transcript.signing.domain.model.SignerRole;
 import com.wpanther.transcript.signing.domain.model.SigningFormat;

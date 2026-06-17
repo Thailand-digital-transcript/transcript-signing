@@ -1,8 +1,8 @@
 package com.wpanther.transcript.signing.infrastructure.adapter.in.camel;
 
-import com.wpanther.saga.domain.outbox.OutboxEvent;
-import com.wpanther.saga.domain.outbox.OutboxEventRepository;
-import com.wpanther.saga.domain.outbox.OutboxStatus;
+import com.wpanther.transcript.saga.domain.outbox.OutboxEvent;
+import com.wpanther.transcript.saga.domain.outbox.OutboxEventRepository;
+import com.wpanther.transcript.saga.domain.outbox.OutboxStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.Exchange;

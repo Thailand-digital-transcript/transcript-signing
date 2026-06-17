@@ -2,10 +2,10 @@ package com.wpanther.transcript.signing.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.saga.domain.enums.SagaStep;
-import com.wpanther.saga.domain.outbox.OutboxEvent;
-import com.wpanther.saga.domain.outbox.OutboxEventRepository;
-import com.wpanther.saga.domain.outbox.OutboxStatus;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.outbox.OutboxEvent;
+import com.wpanther.transcript.saga.domain.outbox.OutboxEventRepository;
+import com.wpanther.transcript.saga.domain.outbox.OutboxStatus;
 import com.wpanther.transcript.signing.application.dto.event.BatchSigningReplyEvent;
 import com.wpanther.transcript.signing.application.dto.event.BatchSigningReplyEvent.ItemResult;
 import com.wpanther.transcript.signing.application.port.out.BatchSagaReplyPort;

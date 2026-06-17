@@ -8,7 +8,7 @@ import com.wpanther.transcript.signing.application.usecase.BatchSigningCommandHa
 import com.wpanther.transcript.signing.domain.model.*;
 import com.wpanther.transcript.signing.application.port.out.SignerCredentialResolver.ResolvedSigner;
 import com.wpanther.transcript.signing.domain.repository.BatchSigningJobRepository;
-import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionTemplate;

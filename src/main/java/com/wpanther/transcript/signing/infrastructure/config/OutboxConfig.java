@@ -1,10 +1,10 @@
 package com.wpanther.transcript.signing.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.saga.domain.outbox.OutboxEvent;
-import com.wpanther.saga.domain.outbox.OutboxEventRepository;
-import com.wpanther.saga.domain.outbox.OutboxStatus;
-import com.wpanther.saga.infrastructure.outbox.OutboxService;
+import com.wpanther.transcript.saga.domain.outbox.OutboxEvent;
+import com.wpanther.transcript.saga.domain.outbox.OutboxEventRepository;
+import com.wpanther.transcript.saga.domain.outbox.OutboxStatus;
+import com.wpanther.transcript.saga.infrastructure.outbox.OutboxService;
 import com.wpanther.transcript.signing.infrastructure.persistence.outbox.OutboxEventEntity;
 import com.wpanther.transcript.signing.infrastructure.persistence.outbox.SpringDataOutboxRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

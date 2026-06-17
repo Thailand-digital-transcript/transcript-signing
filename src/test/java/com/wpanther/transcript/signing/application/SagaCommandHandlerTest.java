@@ -1,6 +1,6 @@
 package com.wpanther.transcript.signing.application;
 
-import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.transcript.saga.domain.enums.SagaStep;
 import com.wpanther.transcript.signing.application.dto.SignHashResult;
 import com.wpanther.transcript.signing.application.dto.SigningResult;
 import com.wpanther.transcript.signing.application.dto.StorageResult;
