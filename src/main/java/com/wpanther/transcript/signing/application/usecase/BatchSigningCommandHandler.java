@@ -136,7 +136,10 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
 
     private void publishReply(BatchSigningCommand command, BatchSigningJob job) {
         List<ItemResult> results = job.getItems().stream().map(i -> i.isSigned()
-                ? ItemResult.signed(i.getDocumentId(), i.getSignedDocUrl(),
+                // Return the S3 KEY (not the presigned URL): the orchestrator
+                // feeds this value back as the source key for the next signing
+                // phase (downloadByKey), so it must be a bucket-relative key.
+                ? ItemResult.signed(i.getDocumentId(), i.getSignedDocKey(),
                         i.getSignedDocSize() == null ? 0L : i.getSignedDocSize())
                 : ItemResult.failed(i.getDocumentId(), i.getErrorMessage())).toList();
         // wrap standalone republish in a tx (outbox adapter is @Transactional(MANDATORY))

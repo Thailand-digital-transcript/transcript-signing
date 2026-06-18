@@ -12,6 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
              configuration = FeignClientConfig.class)
 public interface CscAuthorizationClient {
 
-    @PostMapping("/csc/v1/credentials/authorize")
+    @PostMapping("/csc/v2/credentials/authorize")
     CscAuthorizeResponse authorize(@RequestBody CscAuthorizeRequest request);
 }

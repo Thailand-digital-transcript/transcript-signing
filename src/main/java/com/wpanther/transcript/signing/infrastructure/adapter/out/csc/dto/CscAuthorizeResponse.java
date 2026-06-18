@@ -8,9 +8,10 @@ import lombok.Setter;
 @Getter @Setter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CscAuthorizeResponse {
-    // CSC API returns "SAD" (uppercase) — Jackson is case-sensitive by default,
-    // so the annotation is required to deserialize the field correctly.
-    @JsonProperty("SAD")
+    // The eidasremotesigning CSC returns the SAD under the lowercase key "sad"
+    // in the authorize response. Jackson is case-sensitive, so this must match
+    // exactly or the SAD deserialises to null (→ CSC_AUTH_EMPTY_SAD).
+    @JsonProperty("sad")
     private String sad;
     private long expiresIn;
 }

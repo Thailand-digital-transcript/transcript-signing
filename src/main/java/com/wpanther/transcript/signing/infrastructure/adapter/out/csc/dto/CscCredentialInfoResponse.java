@@ -22,7 +22,8 @@ public class CscCredentialInfoResponse {
     @Getter @Setter
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Key {
-        private String algo;
+        // CSC v2 returns key.algo as an array of signature-algorithm OIDs.
+        private List<String> algo;
         private int len;
     }
 }

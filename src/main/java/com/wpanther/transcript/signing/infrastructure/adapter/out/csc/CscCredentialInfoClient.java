@@ -12,6 +12,6 @@ import org.springframework.web.bind.annotation.RequestBody;
              configuration = FeignClientConfig.class)
 public interface CscCredentialInfoClient {
 
-    @PostMapping("/csc/v1/credentials/info")
+    @PostMapping("/csc/v2/credentials/info")
     CscCredentialInfoResponse getCredentialInfo(@RequestBody CscCredentialInfoRequest request);
 }
