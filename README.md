@@ -30,7 +30,7 @@ The service has **no REST API** — it is driven entirely by Kafka commands and 
 | PDF signing | Apache PDFBox 3.0.6 + BouncyCastle 1.83 |
 | Resilience | Resilience4j |
 | Service discovery | Eureka (optional) |
-| Saga plumbing | `saga-commons` 1.0.0-SNAPSHOT |
+| Saga plumbing | `transcript-saga-commons` 1.0.0-SNAPSHOT |
 
 ---
 
