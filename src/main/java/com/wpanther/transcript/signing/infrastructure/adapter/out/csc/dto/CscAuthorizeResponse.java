@@ -8,10 +8,10 @@ import lombok.Setter;
 @Getter @Setter
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class CscAuthorizeResponse {
-    // The eidasremotesigning CSC returns the SAD under the lowercase key "sad"
+    // The eidasremotesigning CSC returns the SAD under the uppercase key "SAD"
     // in the authorize response. Jackson is case-sensitive, so this must match
     // exactly or the SAD deserialises to null (→ CSC_AUTH_EMPTY_SAD).
-    @JsonProperty("sad")
+    @JsonProperty("SAD")
     private String sad;
     private long expiresIn;
 }

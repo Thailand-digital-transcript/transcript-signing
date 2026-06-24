@@ -39,7 +39,7 @@ public final class CscSignHashResponseTransformer {
     public static final String NAME = "csc-sign-hash-transformer";
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-    private static final String SIGN_HASH_PATH = "/csc/v1/signatures/signHash";
+    private static final String SIGN_HASH_PATH = "/csc/v2/signatures/signHash";
 
     private static volatile KeyPair testKeyPair;
     private static volatile X509Certificate testCertificate;
@@ -102,9 +102,9 @@ public final class CscSignHashResponseTransformer {
 
     private static java.util.List<String> extractHashesBase64(String json) throws Exception {
         JsonNode root = MAPPER.readTree(json);
-        JsonNode hashNode = root.get("hash");
+        JsonNode hashNode = root.get("hashes");
         if (hashNode == null || !hashNode.isArray() || hashNode.isEmpty()) {
-            throw new IllegalStateException("signHash request missing 'hash' array");
+            throw new IllegalStateException("signHash request missing 'hashes' array");
         }
         java.util.List<String> out = new java.util.ArrayList<>(hashNode.size());
         for (int i = 0; i < hashNode.size(); i++) {

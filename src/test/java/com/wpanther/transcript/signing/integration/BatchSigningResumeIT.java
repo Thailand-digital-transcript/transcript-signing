@@ -137,7 +137,7 @@ class BatchSigningResumeIT extends IntegrationTestBase {
         });
 
         // CSC signHash was called exactly once: the PENDING item alone needed a fresh signature.
-        wireMock.verify(1, postRequestedFor(urlEqualTo("/csc/v1/signatures/signHash")));
+        wireMock.verify(1, postRequestedFor(urlEqualTo("/csc/v2/signatures/signHash")));
 
         // The PENDING item now has a signed XML.
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
@@ -189,21 +189,21 @@ class BatchSigningResumeIT extends IntegrationTestBase {
     }
 
     private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/info"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"cert\":{\"certificates\":[\"" + TEST_CERT_DER_BASE64 + "\"]},\"key\":{\"algo\":\"RSA\"}}")));
+                        .withBody("{\"cert\":{\"certificates\":[\"" + TEST_CERT_DER_BASE64 + "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
     }
 
     private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/authorize"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"SAD\":\"sad-token-resume\",\"expiresIn\":60}")));
     }
 
     private void stubCscSignHash() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/signatures/signHash"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"placeholder\"]}")

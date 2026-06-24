@@ -93,8 +93,8 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
 
         // CSC must not have been called for the replay — the handler short-circuits at
         // the COMPLETED idempotency check before reaching any CSC port.
-        wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v1/signatures/signHash")));
-        wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v1/credentials/authorize")));
+        wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v2/signatures/signHash")));
+        wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v2/credentials/authorize")));
 
         // S3 objects from the first command must still exist (no re-upload on replay).
         assertThat(minioHelper.objectExists("PDF/doc-idem-001/attempt-0/original.pdf"))
@@ -132,16 +132,16 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
     }
 
     private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/info"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"cert\":{\"certificates\":[\"" +
                                 TEST_CERT_DER_BASE64 +
-                                "\"]},\"key\":{\"algo\":\"RSA\"}}")));
+                                "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
     }
 
     private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/authorize"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"SAD\":\"sad-idem-it\",\"expiresIn\":60}")));
@@ -149,7 +149,7 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
 
     private void stubCscSignHash() {
         String fakeSig = Base64.getEncoder().encodeToString(new byte[256]);
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/signatures/signHash"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"" + fakeSig + "\"]}")));

@@ -129,14 +129,14 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
     }
 
     private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/info"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
-                        .withBody("{\"cert\":{\"certificates\":[\"" + fakeCertBase64() + "\"]},\"key\":{\"algo\":\"RSA\"}}")));
+                        .withBody("{\"cert\":{\"certificates\":[\"" + fakeCertBase64() + "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
     }
 
     private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/authorize"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"SAD\":\"sad-token-it\",\"expiresIn\":60}")));
@@ -149,7 +149,7 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
      * certificate the credentials/info stub returns.
      */
     private void stubCscSignHash() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/signatures/signHash"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"placeholder\"]}")

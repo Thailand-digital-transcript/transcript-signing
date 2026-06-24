@@ -113,7 +113,7 @@ class BatchSigningPipelineIT extends IntegrationTestBase {
         //    guarantee. The transformer signs every hash in the request, so a 2-element
         //    request yields a 2-element response; the fact that both items end up SIGNED
         //    (asserted in step 3) proves the demultiplexing worked.
-        wireMock.verify(1, postRequestedFor(urlEqualTo("/csc/v1/signatures/signHash")));
+        wireMock.verify(1, postRequestedFor(urlEqualTo("/csc/v2/signatures/signHash")));
 
         // 5) For each item, pull the signed XML and assert Santuario's XMLSignature
         //    verifies against the test certificate (which is the same key the WireMock
@@ -176,15 +176,15 @@ class BatchSigningPipelineIT extends IntegrationTestBase {
     }
 
     private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/info"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"cert\":{\"certificates\":[\"" + TEST_CERT_DER_BASE64
-                                + "\"]},\"key\":{\"algo\":\"RSA\"}}")));
+                                + "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
     }
 
     private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/authorize"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"SAD\":\"sad-token-batch\",\"expiresIn\":60}")));
@@ -198,7 +198,7 @@ class BatchSigningPipelineIT extends IntegrationTestBase {
      * 2-element request yields a 2-element response, with order preserved.
      */
     private void stubCscSignHash() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/signatures/signHash"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"placeholder\"]}")

@@ -89,16 +89,16 @@ class TranscriptSigningPdfPipelineIT extends IntegrationTestBase {
     }
 
     private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/info"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"cert\":{\"certificates\":[\"" +
                                 TEST_CERT_DER_BASE64 +
-                                "\"]},\"key\":{\"algo\":\"RSA\"}}")));
+                                "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
     }
 
     private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/credentials/authorize"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"SAD\":\"sad-pdf-it\",\"expiresIn\":60}")));
@@ -106,7 +106,7 @@ class TranscriptSigningPdfPipelineIT extends IntegrationTestBase {
 
     private void stubCscSignHash() {
         String fakeSig = Base64.getEncoder().encodeToString(new byte[256]);
-        wireMock.stubFor(post(urlEqualTo("/csc/v1/signatures/signHash"))
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"" + fakeSig + "\"]}")));
