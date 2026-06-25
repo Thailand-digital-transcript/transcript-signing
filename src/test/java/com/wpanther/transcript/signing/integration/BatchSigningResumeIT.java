@@ -30,8 +30,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.matching;
-import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -183,33 +181,4 @@ class BatchSigningResumeIT extends IntegrationTestBase {
         }
     }
 
-    private void stubCscOAuth2Token() {
-        wireMock.stubFor(post(urlEqualTo("/oauth2/token"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"access_token\":\"test-token\",\"expires_in\":3600}")));
-    }
-
-    private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"cert\":{\"certificates\":[\"" + TEST_CERT_DER_BASE64 + "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
-    }
-
-    private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"SAD\":\"sad-token-resume\",\"expiresIn\":60}")));
-    }
-
-    private void stubCscSignHash() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
-                .withRequestBody(matchingJsonPath("$.SAD", matching("\\S+")))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"signatures\":[\"placeholder\"]}")
-                        .withTransformers(CscSignHashResponseTransformer.NAME)));
-    }
 }

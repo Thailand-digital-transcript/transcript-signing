@@ -47,7 +47,7 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
         stubCscOAuth2Token();
         stubCscCredentialInfo();
         stubCscAuthorize();
-        stubCscSignHash();
+        stubCscSignHashFakeSig();
         stubPdfDownload();
     }
 
@@ -124,35 +124,4 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
         }
     }
 
-    private void stubCscOAuth2Token() {
-        wireMock.stubFor(post(urlEqualTo("/oauth2/token"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"access_token\":\"test-token\",\"expires_in\":3600}")));
-    }
-
-    private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"cert\":{\"certificates\":[\"" +
-                                TEST_CERT_DER_BASE64 +
-                                "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
-    }
-
-    private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"SAD\":\"sad-idem-it\",\"expiresIn\":60}")));
-    }
-
-    private void stubCscSignHash() {
-        String fakeSig = Base64.getEncoder().encodeToString(new byte[256]);
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
-                .withRequestBody(matchingJsonPath("$.SAD", matching("\\S+")))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"signatures\":[\"" + fakeSig + "\"]}")));
-    }
 }

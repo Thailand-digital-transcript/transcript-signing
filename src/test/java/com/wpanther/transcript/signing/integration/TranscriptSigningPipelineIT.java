@@ -6,7 +6,6 @@ import com.wpanther.transcript.signing.application.dto.event.ProcessTranscriptSi
 import com.wpanther.transcript.signing.domain.model.SigningFormat;
 import com.wpanther.transcript.signing.infrastructure.config.properties.KafkaTopicProperties;
 import com.wpanther.transcript.signing.infrastructure.config.properties.StorageProperties;
-import com.wpanther.transcript.signing.integration.support.CscSignHashResponseTransformer;
 import com.wpanther.transcript.signing.integration.support.IntegrationTestBase;
 import com.wpanther.transcript.signing.integration.support.KafkaTestHelper;
 import com.wpanther.transcript.signing.integration.support.MinioTestHelper;
@@ -121,43 +120,4 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
         }
     }
 
-    private void stubCscOAuth2Token() {
-        wireMock.stubFor(post(urlEqualTo("/oauth2/token"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"access_token\":\"test-token\",\"expires_in\":3600}")));
-    }
-
-    private void stubCscCredentialInfo() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"cert\":{\"certificates\":[\"" + fakeCertBase64() + "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
-    }
-
-    private void stubCscAuthorize() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"SAD\":\"sad-token-it\",\"expiresIn\":60}")));
-    }
-
-    /**
-     * The stub wires in {@link CscSignHashResponseTransformer} via
-     * {@code .withTransformers(NAME)} — every request is signed inline with the test RSA
-     * private key, so the resulting {@code ds:SignatureValue} verifies against the same
-     * certificate the credentials/info stub returns.
-     */
-    private void stubCscSignHash() {
-        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
-                .withRequestBody(matchingJsonPath("$.SAD", matching("\\S+")))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/json")
-                        .withBody("{\"signatures\":[\"placeholder\"]}")
-                        .withTransformers(CscSignHashResponseTransformer.NAME)));
-    }
-
-    private String fakeCertBase64() {
-        return TEST_CERT_DER_BASE64;
-    }
 }
