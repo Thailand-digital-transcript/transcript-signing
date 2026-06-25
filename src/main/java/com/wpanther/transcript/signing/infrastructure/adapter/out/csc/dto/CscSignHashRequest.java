@@ -9,6 +9,10 @@ import java.util.List;
 @Getter @Setter
 public class CscSignHashRequest {
     private String credentialID;
+    // CSC v2 wire format requires uppercase "SAD". Without this annotation Jackson
+    // derives the key from getSAD() and lowercases all leading uppercase chars → "sad",
+    // which the eidasremotesigning endpoint reads as null (case-sensitive @JsonProperty).
+    @JsonProperty("SAD")
     private String SAD;
     // CSC v2 expects the hash array under "hashes".
     @JsonProperty("hashes")
