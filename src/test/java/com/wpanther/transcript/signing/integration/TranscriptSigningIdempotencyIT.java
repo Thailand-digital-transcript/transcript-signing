@@ -150,6 +150,7 @@ class TranscriptSigningIdempotencyIT extends IntegrationTestBase {
     private void stubCscSignHash() {
         String fakeSig = Base64.getEncoder().encodeToString(new byte[256]);
         wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
+                .withRequestBody(matchingJsonPath("$.SAD"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"" + fakeSig + "\"]}")));

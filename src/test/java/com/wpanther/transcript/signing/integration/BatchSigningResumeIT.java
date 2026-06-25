@@ -33,6 +33,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
@@ -204,6 +205,7 @@ class BatchSigningResumeIT extends IntegrationTestBase {
 
     private void stubCscSignHash() {
         wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
+                .withRequestBody(matchingJsonPath("$.SAD"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"placeholder\"]}")

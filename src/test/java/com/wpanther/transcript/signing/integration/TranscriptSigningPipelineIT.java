@@ -150,6 +150,7 @@ class TranscriptSigningPipelineIT extends IntegrationTestBase {
      */
     private void stubCscSignHash() {
         wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
+                .withRequestBody(matchingJsonPath("$.SAD"))
                 .willReturn(aResponse().withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("{\"signatures\":[\"placeholder\"]}")
