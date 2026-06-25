@@ -37,6 +37,8 @@ import java.security.cert.X509Certificate;
 import java.util.Base64;
 import java.util.Date;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.*;
+
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @Testcontainers
@@ -164,5 +166,49 @@ public abstract class IntegrationTestBase {
     @AfterEach
     void resetWireMock() {
         wireMock.resetAll();
+    }
+
+    protected void stubCscOAuth2Token() {
+        wireMock.stubFor(post(urlEqualTo("/oauth2/token"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"access_token\":\"test-token\",\"expires_in\":3600}")));
+    }
+
+    protected void stubCscCredentialInfo() {
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/info"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"cert\":{\"certificates\":[\"" + TEST_CERT_DER_BASE64
+                                + "\"]},\"key\":{\"algo\":[\"1.2.840.113549.1.1.11\"],\"len\":2048}}")));
+    }
+
+    protected void stubCscAuthorize() {
+        stubCscAuthorizeWithSad("sad-token-test");
+    }
+
+    protected void stubCscAuthorizeWithSad(String sadValue) {
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/credentials/authorize"))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"SAD\":\"" + sadValue + "\",\"expiresIn\":60}")));
+    }
+
+    protected void stubCscSignHash() {
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
+                .withRequestBody(matchingJsonPath("$.SAD", matching("\\S+")))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"signatures\":[\"placeholder\"]}")
+                        .withTransformers(CscSignHashResponseTransformer.NAME)));
+    }
+
+    protected void stubCscSignHashFakeSig() {
+        String fakeSig = Base64.getEncoder().encodeToString(new byte[256]);
+        wireMock.stubFor(post(urlEqualTo("/csc/v2/signatures/signHash"))
+                .withRequestBody(matchingJsonPath("$.SAD", matching("\\S+")))
+                .willReturn(aResponse().withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"signatures\":[\"" + fakeSig + "\"]}")));
     }
 }
