@@ -30,6 +30,11 @@ public class PadesEmbedder {
             PDSignature signature = new PDSignature();
             signature.setFilter(PDSignature.FILTER_ADOBE_PPKLITE);
             signature.setSubFilter(SUBFILTER);
+            // MUST mirror PadesDigestComputer's signature dict byte-for-byte: /Name is
+            // inside the signed byte range, so omitting it here changes the document
+            // digest and the CSC signature (made over the digest-phase bytes) no longer
+            // verifies — a PAdES "Digest Mismatch".
+            signature.setName("Transcript Signing Service");
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             document.addSignature(signature);
