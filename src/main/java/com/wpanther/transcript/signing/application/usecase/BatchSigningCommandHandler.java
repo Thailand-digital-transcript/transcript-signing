@@ -92,8 +92,9 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
             List<String> digests = prepared.stream().map(Prepared::digest).toList();
             String sad = cscAuthorizationPort.authorize(
                     signer.credentialId(), digests, signer.pin());
-            List<String> signatures = cscSignaturePort.signHash(
+            var cscResult = cscSignaturePort.signHash(
                     digests, sad, signer.credentialId(), signer.hashAlgorithmOid());
+            List<String> signatures = cscResult.signatures();
 
             // TX1.5: write each item's full checkpoint (sigId + signingTime + signature) at once,
             // then persist. The mapper reads the in-memory domain state (no JPA entity cache), so

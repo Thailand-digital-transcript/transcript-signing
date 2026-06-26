@@ -51,7 +51,9 @@ class PadesTranscriptSigningServiceTest {
         when(cscAuthorizationPort.authorize(eq("cred-001"), eq("signedAttrsDigest=="), eq("")))
                 .thenReturn("sad-token-pdf");
         when(cscSignaturePort.signHash(eq("signedAttrsDigest=="), eq("sad-token-pdf"),
-                eq("cred-001"), anyString())).thenReturn("cmsSig==");
+                eq("cred-001"), anyString()))
+                .thenReturn(new com.wpanther.transcript.signing.application.dto.CscSignatureResult(
+                        "txn-pdf-123", java.util.List.of("cmsSig==")));
         when(credentialInfoCache.getCertificate()).thenReturn("cert-pem");
 
         SignHashResult result = service.computeAndSign(pdfBytes);

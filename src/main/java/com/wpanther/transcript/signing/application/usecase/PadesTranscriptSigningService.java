@@ -26,13 +26,13 @@ public class PadesTranscriptSigningService {
         // CSC signs SHA-256(DER(signedAttrs)), not the raw byte-range hash
         String sadToken = cscAuthorizationPort.authorize(
                 cscProperties.getCredentialId(), digestResult.signedAttrsDigestBase64(), cscProperties.getPin());
-        String signatureBase64 = cscSignaturePort.signHash(
+        var cscResult = cscSignaturePort.signHash(
                 digestResult.signedAttrsDigestBase64(), sadToken,
                 cscProperties.getCredentialId(),
                 cscProperties.getHashAlgorithmOid());
         String certificate = credentialInfoCache.getCertificate();
         // PAdES does not use the two-pass prepare/embed seam; sigId/signingTime are N/A for PDF
-        return new SignHashResult(UUID.randomUUID().toString(), signatureBase64, certificate, null, null);
+        return new SignHashResult(cscResult.transactionId(), cscResult.getSingleSignature(), certificate, null, null);
     }
 
     public SigningResult embedAndUpload(byte[] pdfBytes, String pendingSignature,

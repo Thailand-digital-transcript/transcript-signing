@@ -1,5 +1,6 @@
 package com.wpanther.transcript.signing.infrastructure.adapter.out.csc;
 
+import com.wpanther.transcript.signing.application.dto.CscSignatureResult;
 import com.wpanther.transcript.signing.application.port.out.CscSignaturePort;
 import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.dto.CscSignHashRequest;
@@ -22,7 +23,7 @@ public class CscSignatureAdapter implements CscSignaturePort {
     @Override
     @CircuitBreaker(name = "csc-signature")
     @Retry(name = "csc-signature")
-    public String signHash(String hashBase64, String sadToken, String credentialId,
+    public CscSignatureResult signHash(String hashBase64, String sadToken, String credentialId,
                             String hashAlgorithmOid) {
         var request = new CscSignHashRequest();
         request.setCredentialID(credentialId);
@@ -36,7 +37,12 @@ public class CscSignatureAdapter implements CscSignaturePort {
             if (response.getSignatures() == null || response.getSignatures().isEmpty()) {
                 throw new SigningException("CSC_SIGN_EMPTY", "CSC signHash returned no signatures");
             }
-            return response.getSignatures().get(0);
+            String transactionId = response.getResponseID();
+            if (transactionId == null || transactionId.isBlank()) {
+                log.warn("CSC signHash returned blank/missing responseID; using fallback UUID");
+                transactionId = java.util.UUID.randomUUID().toString();
+            }
+            return new CscSignatureResult(transactionId, response.getSignatures());
         } catch (FeignException e) {
             log.error("CSC signHash failed: status={}", e.status(), e);
             throw new SigningException("CSC_SIGN_FAILED", "CSC signHash failed: " + e.getMessage(), e);
@@ -46,7 +52,7 @@ public class CscSignatureAdapter implements CscSignaturePort {
     @Override
     @CircuitBreaker(name = "csc-signature")
     @Retry(name = "csc-signature")
-    public List<String> signHash(List<String> hashesBase64, String sadToken, String credentialId,
+    public CscSignatureResult signHash(List<String> hashesBase64, String sadToken, String credentialId,
                                  String hashAlgorithmOid) {
         var request = new CscSignHashRequest();
         request.setCredentialID(credentialId);
@@ -63,7 +69,12 @@ public class CscSignatureAdapter implements CscSignaturePort {
                                 : response.getSignatures().size()) + " signatures for "
                                 + hashesBase64.size() + " hashes");
             }
-            return response.getSignatures();
+            String transactionId = response.getResponseID();
+            if (transactionId == null || transactionId.isBlank()) {
+                log.warn("CSC signHash returned blank/missing responseID; using fallback UUID");
+                transactionId = java.util.UUID.randomUUID().toString();
+            }
+            return new CscSignatureResult(transactionId, response.getSignatures());
         } catch (FeignException e) {
             log.error("CSC signHash failed: status={}", e.status(), e);
             throw new SigningException("CSC_SIGN_FAILED", "CSC signHash failed: " + e.getMessage(), e);

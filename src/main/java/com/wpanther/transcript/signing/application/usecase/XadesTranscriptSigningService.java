@@ -39,12 +39,12 @@ public class XadesTranscriptSigningService {
         XadesPreparation prep = xadesPreparePort.prepare(xmlBytes, certificate, signingTime, sigId);
         String sadToken = cscAuthorizationPort.authorize(
                 cscProperties.getCredentialId(), prep.signedInfoDigestBase64(), cscProperties.getPin());
-        String signatureBase64 = cscSignaturePort.signHash(
+        var cscResult = cscSignaturePort.signHash(
                 prep.signedInfoDigestBase64(), sadToken,
                 cscProperties.getCredentialId(),
                 cscProperties.getHashAlgorithmOid());
 
-        return new SignHashResult(UUID.randomUUID().toString(), signatureBase64, certificate,
+        return new SignHashResult(cscResult.transactionId(), cscResult.getSingleSignature(), certificate,
                 sigId, signingTime);
     }
 

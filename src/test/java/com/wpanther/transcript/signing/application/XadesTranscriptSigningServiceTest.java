@@ -5,6 +5,8 @@ import com.wpanther.transcript.signing.application.dto.SigningResult;
 import com.wpanther.transcript.signing.application.dto.StorageResult;
 import com.wpanther.transcript.signing.application.dto.XadesPreparation;
 import com.wpanther.transcript.signing.application.port.out.*;
+
+import java.util.List;
 import com.wpanther.transcript.signing.application.usecase.XadesTranscriptSigningService;
 import com.wpanther.transcript.signing.infrastructure.adapter.out.csc.CscCredentialInfoCache;
 import com.wpanther.transcript.signing.infrastructure.config.properties.CscProperties;
@@ -55,11 +57,14 @@ class XadesTranscriptSigningServiceTest {
                 .thenReturn(new XadesPreparation("SI_DIGEST", new byte[]{1}));
         when(cscAuthorizationPort.authorize("cred-001", "SI_DIGEST", "1234")).thenReturn("SAD");
         when(cscSignaturePort.signHash(eq("SI_DIGEST"), eq("SAD"),
-                eq("cred-001"), eq("2.16.840.1.101.3.4.2.1"))).thenReturn("SIGVAL");
+                eq("cred-001"), eq("2.16.840.1.101.3.4.2.1")))
+                .thenReturn(new com.wpanther.transcript.signing.application.dto.CscSignatureResult(
+                        "txn-12345", List.of("SIGVAL")));
 
         SignHashResult result = service.computeAndSign(xmlBytes);
 
         assertThat(result.pendingSignature()).isEqualTo("SIGVAL");
+        assertThat(result.transactionId()).isEqualTo("txn-12345");
         assertThat(result.certificate()).isEqualTo("CERTPEM");
         assertThat(result.sigId()).isNotBlank();
         assertThat(result.signingTime()).isNotNull();
@@ -81,7 +86,9 @@ class XadesTranscriptSigningServiceTest {
                 .thenReturn(new XadesPreparation("SI_DIGEST", new byte[]{1}));
         when(cscAuthorizationPort.authorize("cred-001", "SI_DIGEST", "1234")).thenReturn("SAD");
         when(cscSignaturePort.signHash(eq("SI_DIGEST"), eq("SAD"),
-                eq("cred-001"), eq("2.16.840.1.101.3.4.2.1"))).thenReturn("SIGVAL");
+                eq("cred-001"), eq("2.16.840.1.101.3.4.2.1")))
+                .thenReturn(new com.wpanther.transcript.signing.application.dto.CscSignatureResult(
+                        "txn-123", List.of("SIGVAL")));
 
         SignHashResult result = service.computeAndSign(xmlBytes);
 

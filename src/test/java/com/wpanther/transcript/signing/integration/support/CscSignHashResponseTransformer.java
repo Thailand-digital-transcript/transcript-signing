@@ -83,7 +83,8 @@ public final class CscSignHashResponseTransformer {
                     sigs.append('"').append(Base64.getEncoder().encodeToString(sig)).append('"');
                 }
                 sigs.append(']');
-                String responseJson = "{\"signatures\":" + sigs + "}";
+                // Include responseID for correlation with the CSC operation (matches the live service behavior)
+                String responseJson = "{\"signatures\":" + sigs + ",\"responseID\":\"" + java.util.UUID.randomUUID() + "\"}";
                 return Response.response()
                         .status(200)
                         .body(responseJson)

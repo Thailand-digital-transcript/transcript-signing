@@ -62,7 +62,8 @@ class BatchSigningCommandHandlerTest {
                 .thenReturn(new XadesPreparation("DIGEST", new byte[]{1}));
         when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111"))).thenReturn("SAD");
         when(cscSign.signHash(anyList(), eq("SAD"), eq("cred-reg"), anyString()))
-                .thenReturn(List.of("SIG_d1", "SIG_d2"));
+                .thenReturn(new com.wpanther.transcript.signing.application.dto.CscSignatureResult(
+                        "txn-batch-123", List.of("SIG_d1", "SIG_d2")));
         when(xadesPreparePort.embed(any(), eq("CERT_REG"), any(), anyString(), anyString()))
                 .thenReturn("<signed/>".getBytes());
         when(storage.upload(any(), anyString()))
