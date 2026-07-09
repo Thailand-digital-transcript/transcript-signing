@@ -1,0 +1,70 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out transcript-saga-commons
+        uses: actions/checkout@v4
+        with:
+          repository: Thailand-digital-transcript/transcript-saga-commons
+          path: .libs/transcript-saga-commons
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Install shared library
+        run: mvn -B -q -f .libs/transcript-saga-commons/pom.xml install -Dmaven.test.skip=true
+
+      - name: Package service
+        run: mvn -B -q package -Dmaven.test.skip=true
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build once, locally, and assert the image is well-formed BEFORE publishing.
+      # Without this, a broken healthcheck or jar path ships green and is only
+      # caught at Task 8's full-saga run.
+      - name: Build image for verification
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: verify:local
+
+      - name: Verify image
+        run: ./.github/verify-image.sh verify:local
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/thailand-digital-transcript/transcript-signing
+          tags: |
+            type=raw,value=main,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern=v{{version}}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
