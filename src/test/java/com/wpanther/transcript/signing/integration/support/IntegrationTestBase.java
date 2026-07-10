@@ -165,7 +165,11 @@ public abstract class IntegrationTestBase {
 
     @AfterEach
     void resetWireMock() {
+        // Per transcript-signing/CLAUDE.md "IT HTTP isolation" rule: reset
+        // both mappings AND the request journal so verify(...) counts from
+        // one IT don't bleed into the next.
         wireMock.resetAll();
+        wireMock.resetRequests();
     }
 
     protected void stubCscOAuth2Token() {
