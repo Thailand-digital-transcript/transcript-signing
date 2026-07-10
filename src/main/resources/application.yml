@@ -43,12 +43,8 @@ app:
       enabled: ${OUTBOX_RELAY_ENABLED:true}
   kafka:
     topics:
-      saga-command-transcript-signing: saga.command.transcript-signing
       saga-command-transcript-signing-batch: saga.command.transcript-signing.batch
-      saga-compensation-transcript-signing: saga.compensation.transcript-signing
       saga-reply-transcript-signing: saga.reply.transcript-signing
-      transcript-signed: transcript.signed
-      document-archive: document.archive
       dlq: transcript.signing.dlq
   csc:
     service-url: ${CSC_SERVICE_URL:http://localhost:9000}
@@ -73,9 +69,6 @@ app:
       signature-level: ${XADES_SIGNATURE_LEVEL:XAdES-BASELINE-B}
     pades:
       signature-level: ${PADES_SIGNATURE_LEVEL:PAdES-B-B}
-  signing:
-    max-retries: ${SIGNING_MAX_RETRIES:3}
-    timeout-seconds: ${SIGNING_TIMEOUT_SECONDS:30}
   storage:
     endpoint: ${S3_ENDPOINT:http://localhost:9001}
     access-key: ${S3_ACCESS_KEY:minioadmin}
