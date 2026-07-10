@@ -2,10 +2,7 @@ package com.wpanther.transcript.signing.infrastructure.adapter.in.camel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.transcript.signing.application.dto.event.BatchSigningCommand;
-import com.wpanther.transcript.signing.application.dto.event.CompensateTranscriptSigningCommand;
-import com.wpanther.transcript.signing.application.dto.event.ProcessTranscriptSigningCommand;
 import com.wpanther.transcript.signing.application.usecase.BatchSagaCommandPort;
-import com.wpanther.transcript.signing.application.usecase.SagaCommandPort;
 import com.wpanther.transcript.signing.infrastructure.config.properties.KafkaTopicProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,7 +16,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SagaRouteConfig extends RouteBuilder {
 
-    private final SagaCommandPort sagaCommandPort;
     private final BatchSagaCommandPort batchSagaCommandPort;
     private final ObjectMapper objectMapper;
     private final CommandValidator commandValidator;
@@ -36,40 +32,12 @@ public class SagaRouteConfig extends RouteBuilder {
                 .handled(true)
                 .to("kafka:" + topics.getDlq() + buildKafkaProducerOptions());
 
-        from(kafkaConsumerUrl(topics.getSagaCommandTranscriptSigning()))
-                .routeId("transcript-signing-command")
-                .process(this::unmarshalSigningCommand)
-                .process(commandValidator)
-                .process(exchange -> sagaCommandPort.handleSigningCommand(
-                        exchange.getIn().getBody(ProcessTranscriptSigningCommand.class)));
-
-        from(kafkaConsumerUrl(topics.getSagaCompensationTranscriptSigning()))
-                .routeId("transcript-signing-compensation")
-                .process(this::unmarshalCompensationCommand)
-                .process(commandValidator)
-                .process(exchange -> sagaCommandPort.handleCompensationCommand(
-                        exchange.getIn().getBody(CompensateTranscriptSigningCommand.class)));
-
         from(kafkaConsumerUrl(topics.getSagaCommandTranscriptSigningBatch()))
                 .routeId("transcript-signing-batch-command")
                 .process(this::unmarshalBatchCommand)
                 .process(commandValidator)
                 .process(exchange -> batchSagaCommandPort.handleBatchSigning(
                         exchange.getIn().getBody(BatchSigningCommand.class)));
-    }
-
-    private void unmarshalSigningCommand(Exchange exchange) throws Exception {
-        String body = exchange.getIn().getBody(String.class);
-        ProcessTranscriptSigningCommand command =
-                objectMapper.readValue(body, ProcessTranscriptSigningCommand.class);
-        exchange.getIn().setBody(command);
-    }
-
-    private void unmarshalCompensationCommand(Exchange exchange) throws Exception {
-        String body = exchange.getIn().getBody(String.class);
-        CompensateTranscriptSigningCommand command =
-                objectMapper.readValue(body, CompensateTranscriptSigningCommand.class);
-        exchange.getIn().setBody(command);
     }
 
     private void unmarshalBatchCommand(Exchange exchange) throws Exception {
