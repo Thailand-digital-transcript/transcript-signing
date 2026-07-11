@@ -23,6 +23,13 @@ public class SagaRouteConfig extends RouteBuilder {
 
     @Override
     public void configure() {
+        // Dead-letter the bytes we consumed from Kafka, not the current exchange body.
+        // By the time a failure surfaces the body is the unmarshalled BatchSigningCommand,
+        // and the Kafka StringSerializer would render it via toString() — leaving the DLQ
+        // holding "BatchSigningCommand(super=...)", which cannot be parsed or replayed.
+        // The original message is also the only faithful copy: the DTO is
+        // @JsonIgnoreProperties(ignoreUnknown = true), so re-serialising it would silently
+        // drop any field this service does not model.
         onException(Exception.class)
                 .maximumRedeliveries(3)
                 .redeliveryDelay(1000)
@@ -30,6 +37,7 @@ public class SagaRouteConfig extends RouteBuilder {
                 .maximumRedeliveryDelay(10_000)
                 .log(LoggingLevel.ERROR, "Routing to DLQ after ${exception.message}")
                 .handled(true)
+                .useOriginalMessage()
                 .to("kafka:" + topics.getDlq() + buildKafkaProducerOptions());
 
         from(kafkaConsumerUrl(topics.getSagaCommandTranscriptSigningBatch()))

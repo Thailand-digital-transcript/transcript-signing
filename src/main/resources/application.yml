@@ -33,6 +33,9 @@ camel:
   springboot:
     name: transcript-signing-camel
     main-run-controller: true
+    # Required for onException().useOriginalMessage() in SagaRouteConfig: without it Camel
+    # dead-letters the current (unmarshalled) body instead of the consumed JSON. Off by default.
+    allow-use-original-message: true
   component:
     kafka:
       brokers: ${KAFKA_BROKERS:localhost:9092}
