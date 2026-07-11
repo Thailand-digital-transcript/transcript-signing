@@ -93,13 +93,5 @@ class BatchSigningJobTest {
         assertThat(job.getVersion()).isEqualTo(7L);
         job.setVersion(8L);
         assertThat(job.getVersion()).isEqualTo(8L);
-
-        // Reference the orphan SigningStatus enum constants to cover the file (it's a
-        // residue of the deleted SignedTranscriptDocument and has no production caller,
-        // but JaCoCo's per-package rule still counts it).
-        assertThat(SigningStatus.PENDING).isNotNull();
-        assertThat(SigningStatus.SIGNING).isNotNull();
-        assertThat(SigningStatus.COMPLETED).isNotNull();
-        assertThat(SigningStatus.FAILED).isNotNull();
     }
 }
