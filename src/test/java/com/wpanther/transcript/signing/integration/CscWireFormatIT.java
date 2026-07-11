@@ -1,99 +1,78 @@
 package com.wpanther.transcript.signing.integration;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.transcript.saga.domain.enums.SagaStep;
-import com.wpanther.transcript.signing.application.dto.event.BatchSigningCommand;
-import com.wpanther.transcript.signing.domain.model.SignerRole;
-import com.wpanther.transcript.signing.domain.model.SigningFormat;
-import com.wpanther.transcript.signing.infrastructure.config.properties.KafkaTopicProperties;
-import com.wpanther.transcript.signing.infrastructure.config.properties.StorageProperties;
+import com.wpanther.transcript.signing.application.port.out.CscAuthorizationPort;
+import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.integration.support.IntegrationTestBase;
-import com.wpanther.transcript.signing.integration.support.KafkaTestHelper;
-import com.wpanther.transcript.signing.integration.support.MinioTestHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
-import java.time.Duration;
 import java.util.List;
-import java.util.UUID;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.*;
+import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Pins the CSC wire-format guard: {@code CscAuthorizationAdapter} rejects a blank SAD
- * ({@code CSC_AUTH_EMPTY_SAD}) BEFORE {@code signHash} is ever invoked. This matters
- * because the CSC API uses uppercase JSON keys ({@code "SAD"}); a missing
- * {@code @JsonProperty("SAD")} deserialises to null/blank and would otherwise bill the
- * HSM for a signature that can never be used.
+ * Pins the CSC authorize wire format against a real HTTP round-trip: WireMock → Feign →
+ * Jackson → {@code CscAuthorizeResponse}.
  *
- * <p>Ported from the retired single-document path. Note the behavioural difference:
- * {@code BatchSigningCommandHandler} calls {@code cscAuthorizationPort.authorize(...)}
- * outside any try/catch, so a blank-SAD {@code SigningException} propagates to Camel's
- * {@code onException} and routes to the DLQ — it does <em>not</em> publish a FAILURE
- * reply the way the old single-doc handler did. We therefore assert on the guard itself
- * (signHash never called) and on the absence of a SUCCESS reply.
+ * <p>The eidasremotesigning CSC returns the SAD under the <em>uppercase</em> key
+ * {@code "SAD"}. Jackson is case-sensitive, so {@code CscAuthorizeResponse.sad} carries an
+ * explicit {@code @JsonProperty("SAD")}. Drop that annotation and — because the class is
+ * also {@code @JsonIgnoreProperties(ignoreUnknown = true)} — the key is silently ignored,
+ * {@code sad} stays null, and every live authorize fails with {@code CSC_AUTH_EMPTY_SAD}.
+ *
+ * <p>{@link #authorize_readsTheUppercaseSadKey()} is the test that actually catches that
+ * regression: it stubs a well-formed uppercase response and asserts the SAD is read back.
+ * Asserting only the blank-SAD rejection would be worthless here — removing
+ * {@code @JsonProperty("SAD")} <em>produces</em> a blank SAD, so a test that expects the
+ * blank-SAD guard to fire would keep passing after the very regression it exists to catch.
+ *
+ * <p>This drives {@link CscAuthorizationPort} directly rather than publishing a Kafka
+ * command. A blank SAD makes the batch handler throw, and Camel then redelivers it
+ * ({@code maximumRedeliveries(3)}) with backoff. Those redeliveries outlive the test
+ * method: {@code @AfterEach} swaps this class's blank-SAD stub for the next IT's valid one,
+ * the persisted PENDING {@code BatchSigningItem} keeps the command replayable, and the
+ * leftover redelivery then sails through authorize and bills a real {@code signHash} inside
+ * the next test. It also fills the {@code csc-authorization} circuit-breaker window (10
+ * failures) and trips it OPEN for 60s. Going straight at the port keeps the blast radius to
+ * this class.
  */
 class CscWireFormatIT extends IntegrationTestBase {
 
-    @Autowired ObjectMapper objectMapper;
-    @Autowired KafkaTopicProperties topics;
-    @Autowired StorageProperties storageProperties;
-
-    KafkaTestHelper kafkaHelper;
-    MinioTestHelper minioHelper;
+    @Autowired CscAuthorizationPort cscAuthorizationPort;
 
     @BeforeEach
     void setUp() {
         wireMock.resetAll();
-        kafkaHelper = new KafkaTestHelper(KAFKA.getBootstrapServers(), objectMapper);
-        minioHelper = new MinioTestHelper(
-                MINIO.getS3URL(), "minioadmin", "minioadmin",
-                storageProperties.getBucketName());
         stubCscOAuth2Token();
         stubCscCredentialInfo();
-        stubCscAuthorizeWithSad("");  // blank SAD — production blank-SAD guard rejects this
-        // No signHash stub is registered. It is never reached because the adapter throws
-        // CSC_AUTH_EMPTY_SAD at the authorize step before signHash is ever invoked.
+        // No signHash stub is registered: authorize must be the only endpoint reached.
     }
 
     @Test
-    void batchSigning_failsAtAuthorize_andNeverCallsSignHash_whenSadIsBlank() throws Exception {
-        String docId = "doc-wire-" + UUID.randomUUID().toString().substring(0, 8);
-        String sagaId = "saga-wire-" + UUID.randomUUID().toString().substring(0, 8);
-        String correlationId = "corr-wire-" + UUID.randomUUID().toString().substring(0, 8);
-        String batchId = "batch-wire-" + UUID.randomUUID().toString().substring(0, 8);
-        String originalKey = "XML/" + docId + "/orig.xml";
+    void authorize_readsTheUppercaseSadKey() {
+        stubCscAuthorizeWithSad("sad-token-abc");
 
-        minioHelper.putObject(originalKey,
-                ("<Transcript><DocumentID>" + docId + "</DocumentID></Transcript>").getBytes());
+        String sad = cscAuthorizationPort.authorize("cred-a", List.of("hash-1", "hash-2"), "1111");
 
-        var command = new BatchSigningCommand(null, null, null, null,
-                sagaId, SagaStep.SIGN_XML, correlationId, batchId,
-                SignerRole.REGISTRAR, SigningFormat.XML,
-                List.of(new BatchSigningCommand.Item(docId, "NUM-" + docId, originalKey)));
+        assertThat(sad)
+                .as("the SAD arrives under the uppercase JSON key \"SAD\"; losing "
+                        + "@JsonProperty(\"SAD\") deserialises it to null")
+                .isEqualTo("sad-token-abc");
+    }
 
-        kafkaHelper.sendCommand(topics.getSagaCommandTranscriptSigningBatch(), command);
+    @Test
+    void authorize_blankSad_isRejectedBeforeSignHashIsEverCalled() {
+        stubCscAuthorizeWithSad("");
 
-        // Wait until the handler has reached authorize at least once. Camel will retry
-        // (maximumRedeliveries(3)) and eventually DLQ, so the real count settles at 4 —
-        // but do NOT assert 4. That would couple this test to the redelivery policy, which
-        // has nothing to do with the wire-format guard being pinned here.
-        await().atMost(Duration.ofSeconds(30)).untilAsserted(() ->
-                wireMock.verify(moreThanOrExactly(1),
-                        postRequestedFor(urlEqualTo("/csc/v2/credentials/authorize"))));
+        assertThatThrownBy(() ->
+                cscAuthorizationPort.authorize("cred-a", List.of("hash-1"), "1111"))
+                .isInstanceOf(SigningException.class)
+                .hasMessageContaining("SAD");
 
-        // The invariant: authorize always throws on a blank SAD, so signHash is unreachable
-        // at every instant — no race with in-flight redeliveries. This is the whole point of
-        // the guard: never bill the HSM for a signature that can never be used.
         wireMock.verify(0, postRequestedFor(urlEqualTo("/csc/v2/signatures/signHash")));
-
-        var reply = kafkaHelper.pollFor(topics.getSagaReplyTranscriptSigning(),
-                Duration.ofSeconds(2), sagaId);
-        assertThat(reply)
-                .as("no SUCCESS reply may be produced when the blank-SAD guard fires")
-                .isEmpty();
     }
 }

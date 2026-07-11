@@ -223,4 +223,28 @@ class BatchSigningCommandHandlerTest {
                         && items.stream().anyMatch(i -> "SIGNED".equals(i.getStatus())
                                 && "d2".equals(i.getDocumentId()))));
     }
+
+    /**
+     * The HSM bills per signature, so a failed authorize must never reach signHash. The
+     * handler gets this from ordering alone — authorize is called first and its exception
+     * propagates — but nothing pinned it until now.
+     */
+    @Test
+    void authorizeFailure_neverCallsSignHash() {
+        when(repository.findByCorrelationId("corr-auth")).thenReturn(Optional.empty());
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(storage.downloadByKey(anyString())).thenReturn("<x/>".getBytes());
+        when(xadesPreparePort.prepare(any(), eq("CERT_REG"), any(), anyString()))
+                .thenReturn(new XadesPreparation("DIGEST", new byte[]{1}));
+        when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111")))
+                .thenThrow(new SigningException("CSC_AUTH_EMPTY_SAD",
+                        "CSC authorize returned empty SAD token"));
+
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> handler.handleBatchSigning(command("corr-auth", "d1")))
+                .isInstanceOf(SigningException.class);
+
+        verify(cscAuth, times(1)).authorize(eq("cred-reg"), anyList(), eq("1111"));
+        verify(cscSign, never()).signHash(anyList(), anyString(), anyString(), anyString());
+    }
 }

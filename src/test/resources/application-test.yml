@@ -18,8 +18,6 @@ app:
     service-url: http://localhost:${wiremock.server.port:8089}
   storage:
     endpoint: http://localhost:${minio.port:9001}
-  signing:
-    max-retries: 3
   outbox:
     relay:
       enabled: true
