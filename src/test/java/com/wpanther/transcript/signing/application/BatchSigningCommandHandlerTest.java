@@ -30,7 +30,6 @@ class BatchSigningCommandHandlerTest {
     CscSignaturePort cscSign = mock(CscSignaturePort.class);
     SignerCredentialResolver resolver = mock(SignerCredentialResolver.class);
     DocumentStoragePort storage = mock(DocumentStoragePort.class);
-    DocumentDownloadPort downloadPort = mock(DocumentDownloadPort.class);
     BatchSagaReplyPort replyPort = mock(BatchSagaReplyPort.class);
     TransactionTemplate tx = mock(TransactionTemplate.class);
     StorageProperties properties = new StorageProperties();
@@ -50,7 +49,7 @@ class BatchSigningCommandHandlerTest {
         properties.setBucketName("signed-transcripts");
 
         handler = new BatchSigningCommandHandler(repository, xadesPreparePort, padesEmbeddingPort,
-                cscAuth, cscSign, resolver, storage, downloadPort, replyPort, tx, properties);
+                cscAuth, cscSign, resolver, storage, replyPort, tx, properties);
     }
 
     private BatchSigningCommand command(String corr, String... docIds) {
@@ -123,12 +122,11 @@ class BatchSigningCommandHandlerTest {
 
         // input fetched via the allow-listed storage port, from the orchestrator-named
         // bucket. Downloaded twice (prepare digest + embed recompute), mirroring the
-        // XAdES two-pass structure. documentDownloadPort is never touched by this task
-        // (Task 8 removes it) but must see zero interactions here.
+        // XAdES two-pass structure. documentDownloadPort no longer exists (Task 8 deleted
+        // it) — everything reads through documentStoragePort.download(StorageRef) now.
         verify(storage, times(2)).download(new com.wpanther.transcript.signing.domain.model.StorageRef(
                 "transcript-pdfs", "d1/transcript.pdf"));
         verify(storage, never()).downloadByKey(anyString());
-        verifyNoInteractions(downloadPort);
         // PAdES path used; XAdES path untouched
         verify(padesEmbeddingPort).embedSignature(any(), eq("PADES_SIG"), eq("CERT_SEAL"));
         verifyNoInteractions(xadesPreparePort);
@@ -201,6 +199,45 @@ class BatchSigningCommandHandlerTest {
         // all items signed in the end (d1 was signed in the rehydrated state, d2 was just signed)
         verify(replyPort).publishBatchReply(eq("saga-1"), eq(SagaStep.SIGN_XML), eq("corr-r"),
                 eq("batch-1"), eq(true), argThat(items -> items.size() == 2));
+    }
+
+    /**
+     * A batch persisted before V5 has no source_bucket column populated; null means "read
+     * from signing's own bucket" (StorageProperties.bucketName) — exactly where those
+     * in-flight sources live, so a batch mid-flight across the deploy still resumes.
+     * Domain-level coverage of the fallback already exists (BatchSigningItemTest), and
+     * IT-level coverage exists (BatchSigningResumeIT), but nothing pinned it at the handler
+     * level — this is the seam where downloadSource() actually picks the bucket.
+     */
+    @Test
+    void preV5Item_withNullSourceBucket_readsFromSigningsOwnBucket() {
+        var preV5Item = BatchSigningItem.rehydrate(java.util.UUID.randomUUID(), "d1", "num-d1",
+                "XML/old/d1/signed.xml", /* sourceBucket */ null, "XML/batch-1/d1/signed.xml",
+                BatchItemStatus.PENDING, null, null, null, null, null, null, null);
+        var job = BatchSigningJob.rehydrate(java.util.UUID.randomUUID(), "corr-nb", "batch-1",
+                "saga-1", SignerRole.REGISTRAR, SigningFormat.XML, BatchJobStatus.SIGNING,
+                List.of(preV5Item), 0L);
+        when(repository.findByCorrelationId("corr-nb")).thenReturn(Optional.of(job));
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(storage.download(any())).thenReturn("<x/>".getBytes());
+        when(xadesPreparePort.prepare(any(), eq("CERT_REG"), any(), anyString()))
+                .thenReturn(new XadesPreparation("DIGEST", new byte[]{1}));
+        when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111"))).thenReturn("SAD");
+        when(cscSign.signHash(anyList(), eq("SAD"), eq("cred-reg"), anyString()))
+                .thenReturn(new com.wpanther.transcript.signing.application.dto.CscSignatureResult(
+                        "txn-nb", List.of("SIG_d1")));
+        when(xadesPreparePort.embed(any(), eq("CERT_REG"), any(), anyString(), anyString()))
+                .thenReturn("<signed/>".getBytes());
+        when(storage.upload(any(), anyString()))
+                .thenAnswer(inv -> new StorageResult(inv.getArgument(1), "url", 9L));
+
+        handler.handleBatchSigning(command("corr-nb", "d1"));
+
+        // downloadSource() is called once in the prepare phase and again in the embed
+        // phase (same two-pass shape as every other item) — both must resolve the null
+        // sourceBucket to signing's own bucket, never to null or the orchestrator's bucket.
+        verify(storage, times(2)).download(new com.wpanther.transcript.signing.domain.model.StorageRef(
+                "signed-transcripts", "XML/old/d1/signed.xml"));
     }
 
     @Test

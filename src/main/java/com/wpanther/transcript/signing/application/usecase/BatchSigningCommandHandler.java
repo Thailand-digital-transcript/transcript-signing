@@ -33,7 +33,6 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
     private final CscSignaturePort cscSignaturePort;
     private final SignerCredentialResolver credentialResolver;
     private final DocumentStoragePort documentStoragePort;
-    private final DocumentDownloadPort documentDownloadPort;
     private final BatchSagaReplyPort batchSagaReplyPort;
     private final TransactionTemplate transactionTemplate;
     private final StorageProperties properties;
