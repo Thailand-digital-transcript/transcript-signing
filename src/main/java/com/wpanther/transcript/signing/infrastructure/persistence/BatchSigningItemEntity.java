@@ -15,6 +15,8 @@ public class BatchSigningItemEntity {
     @Column(name = "document_id", nullable = false, length = 100) private String documentId;
     @Column(name = "document_number", nullable = false, length = 50) private String documentNumber;
     @Column(name = "source_storage_key", nullable = false, length = 500) private String sourceStorageKey;
+    @Column(name = "source_bucket", length = 63) private String sourceBucket;
+    @Column(name = "target_storage_key", length = 500) private String targetStorageKey;
     @Column(nullable = false, length = 20) private String status;
     @Column(name = "sig_id", length = 100) private String sigId;
     @Column(name = "signing_time") private Instant signingTime;

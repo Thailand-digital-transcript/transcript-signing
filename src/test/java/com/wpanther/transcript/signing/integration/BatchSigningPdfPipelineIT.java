@@ -30,10 +30,11 @@ import static org.awaitility.Awaitility.await;
  * BatchSigningResumeIT both use SigningFormat.XML, so without this the batch PDF phase
  * has no integration coverage.
  *
- * <p>Unlike the XML rounds, the PDF round fetches its source over HTTP
- * ({@code BatchSigningCommandHandler.downloadSource()} branches on
- * {@code format == SigningFormat.PDF} and calls {@code documentDownloadPort}), so the
- * item's storageKey is a URL, not a bucket-relative MinIO key.
+ * <p>As of Task 7, the PDF round fetches its source the same way every other phase does:
+ * {@code BatchSigningCommandHandler.downloadSource()} no longer branches on format — it
+ * always calls {@code documentStoragePort.download(StorageRef)}. The item's storageKey is
+ * therefore a bucket-relative MinIO key (plus an explicit {@code sourceBucket}), not a
+ * presigned HTTP URL; {@code documentDownloadPort} is unused dead wiring left for Task 8.
  */
 class BatchSigningPdfPipelineIT extends IntegrationTestBase {
 
@@ -55,7 +56,6 @@ class BatchSigningPdfPipelineIT extends IntegrationTestBase {
         stubCscCredentialInfo();
         stubCscAuthorize();
         stubCscSignHashFakeSig();
-        stubPdfDownload();
     }
 
     @Test
@@ -64,13 +64,19 @@ class BatchSigningPdfPipelineIT extends IntegrationTestBase {
         String sagaId = "saga-batch-pdf-" + UUID.randomUUID().toString().substring(0, 8);
         String correlationId = "corr-batch-pdf-" + UUID.randomUUID().toString().substring(0, 8);
         String batchId = "batch-pdf-" + UUID.randomUUID().toString().substring(0, 8);
-        String pdfUrl = "http://localhost:" + wireMock.port() + "/sample.pdf";
+        String sourceKey = "PDF/" + docId + "/rendered.pdf";
         String signedKey = String.format("PDF/%s/%s/signed.pdf", batchId, docId);
+
+        // The rendered PDF now lives at a bucket-relative key in MinIO, not behind a
+        // presigned HTTP URL — the orchestrator names the (bucket, key), same as the XML
+        // rounds.
+        minioHelper.putObject(sourceKey, createMinimalPdf());
 
         var command = new BatchSigningCommand(null, null, null, null,
                 sagaId, SagaStep.SIGN_PDF, correlationId, batchId,
                 SignerRole.SEAL, SigningFormat.PDF,
-                List.of(new BatchSigningCommand.Item(docId, "NUM-" + docId, pdfUrl)));
+                List.of(new BatchSigningCommand.Item(docId, "NUM-" + docId, sourceKey,
+                        storageProperties.getBucketName(), signedKey)));
 
         kafkaHelper.sendCommand(topics.getSagaCommandTranscriptSigningBatch(), command);
 
@@ -88,13 +94,6 @@ class BatchSigningPdfPipelineIT extends IntegrationTestBase {
                 .isTrue();
 
         wireMock.verify(1, postRequestedFor(urlEqualTo("/csc/v2/signatures/signHash")));
-    }
-
-    private void stubPdfDownload() {
-        wireMock.stubFor(get(urlEqualTo("/sample.pdf"))
-                .willReturn(aResponse().withStatus(200)
-                        .withHeader("Content-Type", "application/pdf")
-                        .withBody(createMinimalPdf())));
     }
 
     private byte[] createMinimalPdf() {

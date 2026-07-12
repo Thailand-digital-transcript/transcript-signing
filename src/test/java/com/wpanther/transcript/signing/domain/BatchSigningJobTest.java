@@ -12,7 +12,8 @@ class BatchSigningJobTest {
 
     private BatchSigningItem item(String docId, BatchItemStatus status, String sig) {
         return BatchSigningItem.rehydrate(java.util.UUID.randomUUID(), docId, "num-" + docId,
-                "XML/" + docId + "/orig.xml", status, "Sig-" + docId,
+                "XML/" + docId + "/orig.xml", "transcripts", "XML/batch-1/" + docId + "/signed.xml",
+                status, "Sig-" + docId,
                 Instant.parse("2026-06-16T10:00:00Z"), sig, null, null, null, null);
     }
 

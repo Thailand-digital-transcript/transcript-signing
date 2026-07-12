@@ -21,7 +21,14 @@ import com.wpanther.transcript.signing.integration.support.MinioTestHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.BucketAlreadyOwnedByYouException;
+import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -41,8 +48,19 @@ import static org.awaitility.Awaitility.await;
  * mirrors 1A Task 8 — the single shared context's consumer in {@code transcript-signing-group}
  * takes the command, and {@code itemsNeedingFreshSignature()} excludes the SIGNED item so
  * exactly one CSC signHash call is made (for the PENDING item only).
+ *
+ * <p>The PENDING item's source lives in a bucket OTHER than signing's own configured
+ * bucket ({@link #ALT_BUCKET}), pre-seeded as the persisted {@code source_bucket} column
+ * (V5). This is the test that proves the persisted column actually works: a resumed job is
+ * loaded via {@code BatchSigningJobMapper.toDomain} from the JPA entity, not from the
+ * command, so if {@code source_bucket} did not round-trip through the database the download
+ * would silently fall back to signing's own bucket and 404 against MinIO — this must not
+ * pass by accident.
  */
 class BatchSigningResumeIT extends IntegrationTestBase {
+
+    /** A bucket other than signing's own, to prove source_bucket survives the DB round-trip. */
+    private static final String ALT_BUCKET = "transcripts";
 
     @Autowired ObjectMapper objectMapper;
     @Autowired KafkaTopicProperties topics;
@@ -52,6 +70,7 @@ class BatchSigningResumeIT extends IntegrationTestBase {
 
     KafkaTestHelper kafkaHelper;
     MinioTestHelper minioHelper;
+    MinioTestHelper altMinioHelper;
 
     @BeforeEach
     void setUp() {
@@ -62,10 +81,28 @@ class BatchSigningResumeIT extends IntegrationTestBase {
         minioHelper = new MinioTestHelper(
                 MINIO.getS3URL(), "minioadmin", "minioadmin",
                 storageProperties.getBucketName());
+        createAltBucketIfMissing();
+        altMinioHelper = new MinioTestHelper(MINIO.getS3URL(), "minioadmin", "minioadmin", ALT_BUCKET);
         stubCscCredentialInfo();
         stubCscOAuth2Token();
         stubCscAuthorize();
         stubCscSignHash();
+    }
+
+    private void createAltBucketIfMissing() {
+        try (S3Client s3 = S3Client.builder()
+                .endpointOverride(URI.create(MINIO.getS3URL()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create("minioadmin", "minioadmin")))
+                .region(Region.US_EAST_1)
+                .forcePathStyle(true)
+                .build()) {
+            try {
+                s3.createBucket(CreateBucketRequest.builder().bucket(ALT_BUCKET).build());
+            } catch (BucketAlreadyOwnedByYouException ignored) {
+                // containers are shared across test classes — bucket already exists
+            }
+        }
     }
 
     @Test
@@ -81,10 +118,14 @@ class BatchSigningResumeIT extends IntegrationTestBase {
         String signedKey2 = "XML/" + batchId + "/" + docId2 + "/signed.xml";
 
         // Both originals uploaded so the handler can download them in the embed loop.
+        // docId1 (already SIGNED) sits in signing's own bucket via the null-sourceBucket
+        // fallback; docId2 (PENDING) sits in ALT_BUCKET — a genuinely different bucket from
+        // signing's own — to prove the persisted source_bucket column, not the fallback,
+        // drives the download.
         byte[] originalXml1 = ("<Transcript><DocumentID>" + docId1 + "</DocumentID></Transcript>").getBytes(StandardCharsets.UTF_8);
         byte[] originalXml2 = ("<Transcript><DocumentID>" + docId2 + "</DocumentID></Transcript>").getBytes(StandardCharsets.UTF_8);
         minioHelper.putObject(originalKey1, originalXml1);
-        minioHelper.putObject(originalKey2, originalXml2);
+        altMinioHelper.putObject(originalKey2, originalXml2);
 
         // Compute the SIGNED item's pending signature + signed XML using the same path the
         // handler uses, so the pre-seeded stored signed XML verifies.
@@ -99,12 +140,17 @@ class BatchSigningResumeIT extends IntegrationTestBase {
         // so JPA performs an INSERT. Note: BatchSigningItem.rehydrate's last two args are
         // (errorMessage, signedDocSize) — the SIGNED item is not in error, and its size is the
         // pre-uploaded signed XML length.
+        //
+        // signedItem uses a null sourceBucket (the pre-V5 fallback to signing's own bucket) —
+        // irrelevant here since it is already SIGNED and never re-downloaded. pendingItem uses
+        // an explicit, DIFFERENT bucket (ALT_BUCKET): this is what proves source_bucket
+        // actually round-trips through the database and drives the real download.
         BatchSigningItem signedItem = BatchSigningItem.rehydrate(
-                UUID.randomUUID(), docId1, "NUM-" + docId1, originalKey1,
+                UUID.randomUUID(), docId1, "NUM-" + docId1, originalKey1, null, signedKey1,
                 BatchItemStatus.SIGNED, sigId, signingTime, pendingSignature,
                 signedKey1, "http://unused/" + signedKey1, null, (long) signedXml1.length);
         BatchSigningItem pendingItem = BatchSigningItem.rehydrate(
-                UUID.randomUUID(), docId2, "NUM-" + docId2, originalKey2,
+                UUID.randomUUID(), docId2, "NUM-" + docId2, originalKey2, ALT_BUCKET, signedKey2,
                 BatchItemStatus.PENDING, null, null, null,
                 null, null, null, null);
         BatchSigningJob job = BatchSigningJob.rehydrate(
@@ -113,10 +159,13 @@ class BatchSigningResumeIT extends IntegrationTestBase {
                 List.of(signedItem, pendingItem), null);
         batchRepository.save(job);
 
-        // Deliver the batch command. The single shared context's consumer takes it.
+        // Deliver the batch command. The single shared context's consumer takes it. The job
+        // already exists (pre-seeded above), so the command's items are not used to construct
+        // BatchSigningItems — handleBatchSigning's job==null branch is skipped entirely — but
+        // they must still carry valid values to satisfy the wire contract.
         var items = List.of(
-                new BatchSigningCommand.Item(docId1, "NUM-" + docId1, originalKey1),
-                new BatchSigningCommand.Item(docId2, "NUM-" + docId2, originalKey2));
+                new BatchSigningCommand.Item(docId1, "NUM-" + docId1, originalKey1, null, signedKey1),
+                new BatchSigningCommand.Item(docId2, "NUM-" + docId2, originalKey2, ALT_BUCKET, signedKey2));
         var command = new BatchSigningCommand(null, null, null, null,
                 sagaId, SagaStep.SIGN_XML, correlationId, batchId,
                 SignerRole.REGISTRAR, SigningFormat.XML, items);

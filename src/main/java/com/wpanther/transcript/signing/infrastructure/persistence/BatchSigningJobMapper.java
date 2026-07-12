@@ -30,6 +30,8 @@ public class BatchSigningJobMapper {
         e.setDocumentId(i.getDocumentId());
         e.setDocumentNumber(i.getDocumentNumber());
         e.setSourceStorageKey(i.getSourceStorageKey());
+        e.setSourceBucket(i.getSourceBucket());
+        e.setTargetStorageKey(i.getTargetStorageKey());
         e.setStatus(i.getStatus().name());
         e.setSigId(i.getSigId());
         e.setSigningTime(i.getSigningTime());
@@ -50,7 +52,8 @@ public class BatchSigningJobMapper {
 
     private BatchSigningItem toItemDomain(BatchSigningItemEntity e) {
         return BatchSigningItem.rehydrate(e.getId(), e.getDocumentId(), e.getDocumentNumber(),
-                e.getSourceStorageKey(), BatchItemStatus.valueOf(e.getStatus()), e.getSigId(),
+                e.getSourceStorageKey(), e.getSourceBucket(), e.getTargetStorageKey(),
+                BatchItemStatus.valueOf(e.getStatus()), e.getSigId(),
                 e.getSigningTime(), e.getPendingSignature(), e.getSignedDocKey(), e.getSignedDocUrl(),
                 e.getErrorMessage(), e.getSignedDocSize());
     }

@@ -9,6 +9,7 @@ import com.wpanther.transcript.signing.application.usecase.BatchSigningCommandHa
 import com.wpanther.transcript.signing.domain.model.*;
 import com.wpanther.transcript.signing.application.port.out.SignerCredentialResolver.ResolvedSigner;
 import com.wpanther.transcript.signing.domain.repository.BatchSigningJobRepository;
+import com.wpanther.transcript.signing.infrastructure.config.properties.StorageProperties;
 import com.wpanther.transcript.saga.domain.enums.SagaStep;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +33,7 @@ class BatchSigningCommandHandlerTest {
     DocumentDownloadPort downloadPort = mock(DocumentDownloadPort.class);
     BatchSagaReplyPort replyPort = mock(BatchSagaReplyPort.class);
     TransactionTemplate tx = mock(TransactionTemplate.class);
+    StorageProperties properties = new StorageProperties();
 
     BatchSigningCommandHandler handler;
 
@@ -45,14 +47,16 @@ class BatchSigningCommandHandlerTest {
                 new ResolvedSigner("cred-reg", "1111", "CERT_REG", "2.16.840.1.101.3.4.2.1"));
         when(resolver.resolve(SignerRole.SEAL)).thenReturn(
                 new ResolvedSigner("cred-seal", "2222", "CERT_SEAL", "2.16.840.1.101.3.4.2.1"));
+        properties.setBucketName("signed-transcripts");
 
         handler = new BatchSigningCommandHandler(repository, xadesPreparePort, padesEmbeddingPort,
-                cscAuth, cscSign, resolver, storage, downloadPort, replyPort, tx);
+                cscAuth, cscSign, resolver, storage, downloadPort, replyPort, tx, properties);
     }
 
     private BatchSigningCommand command(String corr, String... docIds) {
         var items = java.util.Arrays.stream(docIds)
-                .map(d -> new BatchSigningCommand.Item(d, "num-" + d, "XML/" + d + "/orig.xml"))
+                .map(d -> new BatchSigningCommand.Item(d, "num-" + d, "XML/" + d + "/orig.xml",
+                        "transcripts", "XML/batch-1/" + d + "/signed.xml"))
                 .toList();
         return new BatchSigningCommand(null, null, null, null, "saga-1", SagaStep.SIGN_XML, corr,
                 "batch-1", SignerRole.REGISTRAR, SigningFormat.XML, items);
@@ -62,7 +66,7 @@ class BatchSigningCommandHandlerTest {
     void happyPath_signsAllItemsWithOneCscCall() {
         when(repository.findByCorrelationId("corr-1")).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(storage.downloadByKey(anyString())).thenReturn("<x/>".getBytes());
+        when(storage.download(any())).thenReturn("<x/>".getBytes());
         when(xadesPreparePort.prepare(any(), eq("CERT_REG"), any(), anyString()))
                 .thenReturn(new XadesPreparation("DIGEST", new byte[]{1}));
         when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111"))).thenReturn("SAD");
@@ -87,9 +91,11 @@ class BatchSigningCommandHandlerTest {
 
     private BatchSigningCommand pdfCommand(String corr, String... docIds) {
         var items = java.util.Arrays.stream(docIds)
-                // PDF-phase source key is the presigned cross-bucket URL of the rendered PDF
+                // PDF-phase source is now a (bucket, key) ref, like every other phase — the
+                // orchestrator names the rendered PDF's bucket via TranscriptKeyResolver
+                // instead of handing signing a presigned cross-bucket URL.
                 .map(d -> new BatchSigningCommand.Item(d, "num-" + d,
-                        "http://minio:9000/transcript-pdfs/" + d + "/transcript.pdf?sig=x"))
+                        d + "/transcript.pdf", "transcript-pdfs", "PDF/batch-1/" + d + "/signed.pdf"))
                 .toList();
         return new BatchSigningCommand(null, null, null, null, "saga-1", SagaStep.SIGN_PDF, corr,
                 "batch-1", SignerRole.SEAL, SigningFormat.PDF, items);
@@ -99,8 +105,9 @@ class BatchSigningCommandHandlerTest {
     void pdfFormat_signsWithPades_andUploadsSignedPdf() {
         when(repository.findByCorrelationId("corr-pdf")).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        // PDF arrives via the presigned URL, not downloadByKey
-        when(downloadPort.download(anyString())).thenReturn("%PDF-1.6 original".getBytes());
+        // PDF arrives via documentStoragePort.download(StorageRef), same as XAdES sources —
+        // downloadSource() no longer branches by format.
+        when(storage.download(any())).thenReturn("%PDF-1.6 original".getBytes());
         var digest = new PadesDigestResult("%PDF prepared".getBytes(), "PDFDIGEST", new byte[]{9});
         when(padesEmbeddingPort.computeByteRangeDigest(any())).thenReturn(digest);
         when(cscAuth.authorize(eq("cred-seal"), anyList(), eq("2222"))).thenReturn("SAD");
@@ -114,14 +121,18 @@ class BatchSigningCommandHandlerTest {
 
         handler.handleBatchSigning(pdfCommand("corr-pdf", "d1"));
 
-        // input fetched via the presigned URL, never via downloadByKey. Downloaded twice
-        // (prepare digest + embed recompute), mirroring the XAdES two-pass structure.
-        verify(downloadPort, times(2)).download("http://minio:9000/transcript-pdfs/d1/transcript.pdf?sig=x");
+        // input fetched via the allow-listed storage port, from the orchestrator-named
+        // bucket. Downloaded twice (prepare digest + embed recompute), mirroring the
+        // XAdES two-pass structure. documentDownloadPort is never touched by this task
+        // (Task 8 removes it) but must see zero interactions here.
+        verify(storage, times(2)).download(new com.wpanther.transcript.signing.domain.model.StorageRef(
+                "transcript-pdfs", "d1/transcript.pdf"));
         verify(storage, never()).downloadByKey(anyString());
+        verifyNoInteractions(downloadPort);
         // PAdES path used; XAdES path untouched
         verify(padesEmbeddingPort).embedSignature(any(), eq("PADES_SIG"), eq("CERT_SEAL"));
         verifyNoInteractions(xadesPreparePort);
-        // the SIGNED PDF is uploaded under a .pdf key (not signed.xml)
+        // the SIGNED PDF is uploaded under the target key the orchestrator named
         verify(storage).upload(any(), eq("PDF/batch-1/d1/signed.pdf"));
         verify(replyPort).publishBatchReply(eq("saga-1"), eq(SagaStep.SIGN_PDF), eq("corr-pdf"),
                 eq("batch-1"), eq(true), argThat(items -> items.size() == 1));
@@ -132,7 +143,8 @@ class BatchSigningCommandHandlerTest {
         var done = BatchSigningJob.rehydrate(java.util.UUID.randomUUID(), "corr-1", "batch-1", "saga-1",
                 SignerRole.REGISTRAR, SigningFormat.XML, BatchJobStatus.COMPLETED,
                 List.of(BatchSigningItem.rehydrate(java.util.UUID.randomUUID(), "d1", "n1",
-                        "XML/d1/orig.xml", BatchItemStatus.SIGNED, "Sig", null, "sig",
+                        "XML/d1/orig.xml", "transcripts", "XML/batch-1/d1/signed.xml",
+                        BatchItemStatus.SIGNED, "Sig", null, "sig",
                         "XML/d1/signed.xml", "url", null, 10L)), 1L);
         when(repository.findByCorrelationId("corr-1")).thenReturn(Optional.of(done));
 
@@ -152,18 +164,20 @@ class BatchSigningCommandHandlerTest {
         java.util.UUID d1id = java.util.UUID.randomUUID();
         java.util.UUID d2id = java.util.UUID.randomUUID();
         var alreadySigned = BatchSigningItem.rehydrate(d1id, "d1", "n1",
-                "XML/d1/orig.xml", BatchItemStatus.SIGNED, "Sig-1",
+                "XML/d1/orig.xml", "transcripts", "XML/batch-1/d1/signed.xml",
+                BatchItemStatus.SIGNED, "Sig-1",
                 java.time.Instant.parse("2026-06-16T10:00:00Z"), "sig-d1",
                 "XML/d1/signed.xml", "http://minio/signed.xml", null, 11L);
         var needsSign = BatchSigningItem.rehydrate(d2id, "d2", "n2",
-                "XML/d2/orig.xml", BatchItemStatus.PENDING, null, null, null, null, null,
+                "XML/d2/orig.xml", "transcripts", "XML/batch-1/d2/signed.xml",
+                BatchItemStatus.PENDING, null, null, null, null, null,
                 null, null);
         var job = BatchSigningJob.rehydrate(java.util.UUID.randomUUID(), "corr-r", "batch-r",
                 "saga-1", SignerRole.REGISTRAR, SigningFormat.XML, BatchJobStatus.SIGNING,
                 List.of(alreadySigned, needsSign), 0L);
         when(repository.findByCorrelationId("corr-r")).thenReturn(Optional.of(job));
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(storage.downloadByKey(anyString())).thenReturn("<x/>".getBytes());
+        when(storage.download(any())).thenReturn("<x/>".getBytes());
         when(xadesPreparePort.prepare(any(), eq("CERT_REG"), any(), anyString()))
                 .thenReturn(new XadesPreparation("DIGEST_d2", new byte[]{1}));
         when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111"))).thenReturn("SAD");
@@ -193,7 +207,7 @@ class BatchSigningCommandHandlerTest {
     void embedFailure_marksItemFailedAndContinuesWithOthers() {
         when(repository.findByCorrelationId("corr-ef")).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(storage.downloadByKey(anyString())).thenReturn("<x/>".getBytes());
+        when(storage.download(any())).thenReturn("<x/>".getBytes());
         when(xadesPreparePort.prepare(any(), eq("CERT_REG"), any(), anyString()))
                 .thenReturn(new XadesPreparation("DIGEST", new byte[]{1}));
         when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111"))).thenReturn("SAD");
@@ -233,7 +247,7 @@ class BatchSigningCommandHandlerTest {
     void authorizeFailure_neverCallsSignHash() {
         when(repository.findByCorrelationId("corr-auth")).thenReturn(Optional.empty());
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(storage.downloadByKey(anyString())).thenReturn("<x/>".getBytes());
+        when(storage.download(any())).thenReturn("<x/>".getBytes());
         when(xadesPreparePort.prepare(any(), eq("CERT_REG"), any(), anyString()))
                 .thenReturn(new XadesPreparation("DIGEST", new byte[]{1}));
         when(cscAuth.authorize(eq("cred-reg"), anyList(), eq("1111")))

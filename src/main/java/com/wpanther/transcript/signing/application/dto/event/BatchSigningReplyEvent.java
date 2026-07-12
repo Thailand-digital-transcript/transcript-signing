@@ -34,13 +34,13 @@ public class BatchSigningReplyEvent extends SagaReply {
     public static class ItemResult {
         private String documentId;
         private String status;        // SIGNED | FAILED
-        private String signedDocUrl;
+        private String signedDocKey;
         private Long signedDocSize;
         private String errorMessage;
 
-        public static ItemResult signed(String documentId, String url, long size) {
+        public static ItemResult signed(String documentId, String key, long size) {
             ItemResult r = new ItemResult();
-            r.documentId = documentId; r.status = "SIGNED"; r.signedDocUrl = url; r.signedDocSize = size;
+            r.documentId = documentId; r.status = "SIGNED"; r.signedDocKey = key; r.signedDocSize = size;
             return r;
         }
         public static ItemResult failed(String documentId, String error) {
@@ -51,7 +51,7 @@ public class BatchSigningReplyEvent extends SagaReply {
 
         public String getDocumentId()   { return documentId; }
         public String getStatus()       { return status; }
-        public String getSignedDocUrl() { return signedDocUrl; }
+        public String getSignedDocKey() { return signedDocKey; }
         public Long getSignedDocSize()  { return signedDocSize; }
         public String getErrorMessage() { return errorMessage; }
     }

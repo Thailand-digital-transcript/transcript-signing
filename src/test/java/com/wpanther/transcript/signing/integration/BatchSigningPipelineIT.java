@@ -87,8 +87,10 @@ class BatchSigningPipelineIT extends IntegrationTestBase {
         //    protected no-arg + 4-arg ctors, and the @JsonIgnoreProperties-annotated ctor here
         //    is the public Jackson entry point).
         var items = List.of(
-                new BatchSigningCommand.Item(docId1, "NUM-" + docId1, originalKey1),
-                new BatchSigningCommand.Item(docId2, "NUM-" + docId2, originalKey2));
+                new BatchSigningCommand.Item(docId1, "NUM-" + docId1, originalKey1,
+                        storageProperties.getBucketName(), signedKey1),
+                new BatchSigningCommand.Item(docId2, "NUM-" + docId2, originalKey2,
+                        storageProperties.getBucketName(), signedKey2));
         var command = new BatchSigningCommand(null, null, null, null,
                 sagaId, SagaStep.SIGN_XML, correlationId, batchId,
                 SignerRole.REGISTRAR, SigningFormat.XML, items);

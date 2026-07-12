@@ -3,6 +3,7 @@ package com.wpanther.transcript.signing.infrastructure.adapter.out.storage;
 import com.wpanther.transcript.signing.application.dto.StorageResult;
 import com.wpanther.transcript.signing.application.port.out.DocumentStoragePort;
 import com.wpanther.transcript.signing.domain.model.SigningException;
+import com.wpanther.transcript.signing.domain.model.StorageRef;
 import com.wpanther.transcript.signing.infrastructure.config.properties.StorageProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +56,14 @@ public class S3StorageAdapter implements DocumentStoragePort {
         this.presigner = presigner;
     }
 
+    // Test constructor — allow-list tests only exercise download(StorageRef), which never
+    // touches the presigner.
+    S3StorageAdapter(StorageProperties properties, S3Client s3Client) {
+        this.properties = properties;
+        this.s3Client = s3Client;
+        this.presigner = null;
+    }
+
     @Override
     public StorageResult upload(byte[] content, String key) {
         try {
@@ -80,6 +89,23 @@ public class S3StorageAdapter implements DocumentStoragePort {
                     .build()).asByteArray();
         } catch (S3Exception e) {
             throw new SigningException("S3_DOWNLOAD_FAILED", "S3 download failed for key: " + key, e);
+        }
+    }
+
+    @Override
+    public byte[] download(StorageRef ref) {
+        if (!properties.getAllowedSourceBuckets().contains(ref.bucket())) {
+            // PERMANENT failure — do not retry. A disallowed bucket means a bug or a
+            // compromise upstream, and no number of redeliveries will change that.
+            throw new SigningException("STORAGE_BUCKET_NOT_ALLOWED",
+                    "'" + ref.bucket() + "' is not an allowed source bucket");
+        }
+        try {
+            return s3Client.getObjectAsBytes(GetObjectRequest.builder()
+                    .bucket(ref.bucket()).key(ref.key()).build()).asByteArray();
+        } catch (Exception e) {
+            throw new SigningException("STORAGE_DOWNLOAD_FAILED",
+                    "Failed to download s3://" + ref.bucket() + "/" + ref.key(), e);
         }
     }
 

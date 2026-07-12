@@ -53,19 +53,27 @@ public class BatchSigningCommand extends SagaCommand {
     public static class Item {
         private final String documentId;
         private final String documentNumber;
-        private final String storageKey;
+        private final String storageKey;        // the SOURCE key
+        private final String sourceBucket;      // the source's bucket
+        private final String targetStorageKey;  // where to write the signed output
 
         @JsonCreator
         public Item(@JsonProperty("documentId") String documentId,
                     @JsonProperty("documentNumber") String documentNumber,
-                    @JsonProperty("storageKey") String storageKey) {
+                    @JsonProperty("storageKey") String storageKey,
+                    @JsonProperty("sourceBucket") String sourceBucket,
+                    @JsonProperty("targetStorageKey") String targetStorageKey) {
             this.documentId = documentId;
             this.documentNumber = documentNumber;
             this.storageKey = storageKey;
+            this.sourceBucket = sourceBucket;
+            this.targetStorageKey = targetStorageKey;
         }
 
-        public String getDocumentId()     { return documentId; }
-        public String getDocumentNumber() { return documentNumber; }
-        public String getStorageKey()     { return storageKey; }
+        public String getDocumentId()       { return documentId; }
+        public String getDocumentNumber()   { return documentNumber; }
+        public String getStorageKey()       { return storageKey; }
+        public String getSourceBucket()     { return sourceBucket; }
+        public String getTargetStorageKey() { return targetStorageKey; }
     }
 }

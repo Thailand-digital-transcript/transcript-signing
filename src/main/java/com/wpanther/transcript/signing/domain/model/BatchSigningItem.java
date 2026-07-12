@@ -9,6 +9,8 @@ public class BatchSigningItem {
     private final String documentId;
     private final String documentNumber;
     private final String sourceStorageKey;
+    private final String sourceBucket;      // NEW — the source's bucket; null = signing's own bucket
+    private final String targetStorageKey;  // NEW — where to write the signed output
 
     private BatchItemStatus status;
     private String sigId;
@@ -20,25 +22,31 @@ public class BatchSigningItem {
     private String errorMessage;
 
     private BatchSigningItem(UUID id, String documentId, String documentNumber,
-                             String sourceStorageKey, BatchItemStatus status) {
+                             String sourceStorageKey, String sourceBucket, String targetStorageKey,
+                             BatchItemStatus status) {
         this.id = id;
         this.documentId = documentId;
         this.documentNumber = documentNumber;
         this.sourceStorageKey = sourceStorageKey;
+        this.sourceBucket = sourceBucket;
+        this.targetStorageKey = targetStorageKey;
         this.status = status;
     }
 
-    public static BatchSigningItem create(String documentId, String documentNumber, String storageKey) {
+    public static BatchSigningItem create(String documentId, String documentNumber, String storageKey,
+                                          String sourceBucket, String targetStorageKey) {
         return new BatchSigningItem(UUID.randomUUID(), documentId, documentNumber, storageKey,
-                BatchItemStatus.PENDING);
+                sourceBucket, targetStorageKey, BatchItemStatus.PENDING);
     }
 
     public static BatchSigningItem rehydrate(UUID id, String documentId, String documentNumber,
-                                             String sourceStorageKey, BatchItemStatus status,
+                                             String sourceStorageKey, String sourceBucket,
+                                             String targetStorageKey, BatchItemStatus status,
                                              String sigId, Instant signingTime, String pendingSignature,
                                              String signedDocKey, String signedDocUrl, String errorMessage,
                                              Long signedDocSize) {
-        BatchSigningItem i = new BatchSigningItem(id, documentId, documentNumber, sourceStorageKey, status);
+        BatchSigningItem i = new BatchSigningItem(id, documentId, documentNumber, sourceStorageKey,
+                sourceBucket, targetStorageKey, status);
         i.sigId = sigId;
         i.signingTime = signingTime;
         i.pendingSignature = pendingSignature;
@@ -76,6 +84,8 @@ public class BatchSigningItem {
     public String getDocumentId()       { return documentId; }
     public String getDocumentNumber()   { return documentNumber; }
     public String getSourceStorageKey() { return sourceStorageKey; }
+    public String getSourceBucket()     { return sourceBucket; }
+    public String getTargetStorageKey() { return targetStorageKey; }
     public BatchItemStatus getStatus()  { return status; }
     public String getSigId()            { return sigId; }
     public Instant getSigningTime()     { return signingTime; }

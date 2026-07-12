@@ -8,6 +8,7 @@ import com.wpanther.transcript.signing.application.port.out.*;
 import com.wpanther.transcript.signing.application.port.out.SignerCredentialResolver.ResolvedSigner;
 import com.wpanther.transcript.signing.domain.model.*;
 import com.wpanther.transcript.signing.domain.repository.BatchSigningJobRepository;
+import com.wpanther.transcript.signing.infrastructure.config.properties.StorageProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -35,6 +36,7 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
     private final DocumentDownloadPort documentDownloadPort;
     private final BatchSagaReplyPort batchSagaReplyPort;
     private final TransactionTemplate transactionTemplate;
+    private final StorageProperties properties;
 
     @Override
     public void handleBatchSigning(BatchSigningCommand command) {
@@ -63,7 +65,7 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
         if (job == null) {
             List<BatchSigningItem> items = command.getItems().stream()
                     .map(i -> BatchSigningItem.create(i.getDocumentId(), i.getDocumentNumber(),
-                            i.getStorageKey()))
+                            i.getStorageKey(), i.getSourceBucket(), i.getTargetStorageKey()))
                     .toList();
             BatchSigningJob newJob = BatchSigningJob.create(command.getCorrelationId(),
                     command.getBatchId(), command.getSagaId(), command.getSignerRole(),
@@ -86,7 +88,7 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
             record Prepared(BatchSigningItem item, String sigId, Instant signingTime, String digest) {}
             List<Prepared> prepared = new ArrayList<>();
             for (BatchSigningItem item : needSign) {
-                byte[] source = downloadSource(format, item.getSourceStorageKey());
+                byte[] source = downloadSource(item);
                 if (format == SigningFormat.PDF) {
                     // PAdES: the signedAttrs digest is deterministic in the PDF bytes
                     // (signingTime is excluded), so the embed pass can recompute it without
@@ -125,7 +127,7 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
         // Phase 5: embed + upload each item not yet SIGNED (uses its stored signature).
         for (BatchSigningItem item : job.itemsNeedingEmbed()) {
             try {
-                byte[] source = downloadSource(format, item.getSourceStorageKey());
+                byte[] source = downloadSource(item);
                 byte[] signed;
                 if (format == SigningFormat.PDF) {
                     // Recompute the (deterministic) digest, then embed the CSC signature
@@ -137,9 +139,7 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
                     signed = xadesPreparePort.embed(source, certificate, item.getSigningTime(),
                             item.getSigId(), item.getPendingSignature());
                 }
-                String key = String.format("%s/%s/%s/signed.%s", format.name(),
-                        command.getBatchId(), item.getDocumentId(), format.fileExtension());
-                var stored = documentStoragePort.upload(signed, key);
+                var stored = documentStoragePort.upload(signed, item.getTargetStorageKey());
                 item.markSigned(stored.path(), stored.url(), stored.size());
             } catch (Exception e) {
                 log.error("Embed/upload failed for document {}", item.getDocumentId(), e);
@@ -159,21 +159,23 @@ public class BatchSigningCommandHandler implements BatchSagaCommandPort {
     }
 
     /**
-     * Fetch the document to be signed. The PDF (PAdES) phase receives a presigned
-     * cross-bucket URL for the rendered PDF (it lives in the pdf-generation bucket),
-     * whereas the XAdES phases receive a bucket-relative key in this service's own bucket.
+     * Fetch the document to be signed, by bucket-qualified reference. The orchestrator now
+     * names both the bucket and the key for every phase (XAdES and PAdES alike); a null
+     * sourceBucket is the pre-V5 fallback, meaning "signing's own bucket". The allow-list
+     * lives in the storage adapter, not here — this method never decides what is readable.
      */
-    private byte[] downloadSource(SigningFormat format, String sourceKey) {
-        return format == SigningFormat.PDF
-                ? documentDownloadPort.download(sourceKey)
-                : documentStoragePort.downloadByKey(sourceKey);
+    private byte[] downloadSource(BatchSigningItem item) {
+        String bucket = item.getSourceBucket() != null
+                ? item.getSourceBucket()
+                : properties.getBucketName();
+        return documentStoragePort.download(new StorageRef(bucket, item.getSourceStorageKey()));
     }
 
     private void publishReply(BatchSigningCommand command, BatchSigningJob job) {
         List<ItemResult> results = job.getItems().stream().map(i -> i.isSigned()
-                // Return the S3 KEY (not the presigned URL): the orchestrator
-                // feeds this value back as the source key for the next signing
-                // phase (downloadByKey), so it must be a bucket-relative key.
+                // Return the S3 KEY (not a presigned URL): the orchestrator's
+                // TranscriptKeyResolver derives the next phase's (bucket, key) from this
+                // value, so it must be a bucket-relative key, never a bearer-bearing URL.
                 ? ItemResult.signed(i.getDocumentId(), i.getSignedDocKey(),
                         i.getSignedDocSize() == null ? 0L : i.getSignedDocSize())
                 : ItemResult.failed(i.getDocumentId(), i.getErrorMessage())).toList();

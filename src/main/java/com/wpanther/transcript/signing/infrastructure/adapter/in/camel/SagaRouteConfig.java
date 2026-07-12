@@ -3,6 +3,7 @@ package com.wpanther.transcript.signing.infrastructure.adapter.in.camel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.transcript.signing.application.dto.event.BatchSigningCommand;
 import com.wpanther.transcript.signing.application.usecase.BatchSagaCommandPort;
+import com.wpanther.transcript.signing.domain.model.SigningException;
 import com.wpanther.transcript.signing.infrastructure.config.properties.KafkaTopicProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,25 @@ public class SagaRouteConfig extends RouteBuilder {
         // The original message is also the only faithful copy: the DTO is
         // @JsonIgnoreProperties(ignoreUnknown = true), so re-serialising it would silently
         // drop any field this service does not model.
+        // A disallowed source bucket (S3StorageAdapter.download) is a PERMANENT failure: it
+        // signals a bug or compromise upstream in the orchestrator, and no number of
+        // redeliveries changes the answer. This clause must be declared before the general
+        // onException(Exception.class) below — Camel evaluates onException clauses for the
+        // same exception type in declaration order, first match wins — so it DLQs on the
+        // first attempt instead of after four (0 redeliveries vs. the general 3).
+        onException(SigningException.class)
+                .onWhen(exchange -> {
+                    Throwable caught = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
+                    return caught instanceof SigningException se
+                            && "STORAGE_BUCKET_NOT_ALLOWED".equals(se.getErrorCode());
+                })
+                .maximumRedeliveries(0)
+                .log(LoggingLevel.ERROR, "Permanent failure (disallowed source bucket) — "
+                        + "routing to DLQ without redelivery: ${exception.message}")
+                .handled(true)
+                .useOriginalMessage()
+                .to("kafka:" + topics.getDlq() + buildKafkaProducerOptions());
+
         onException(Exception.class)
                 .maximumRedeliveries(3)
                 .redeliveryDelay(1000)
