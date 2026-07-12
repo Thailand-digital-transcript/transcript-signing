@@ -34,7 +34,8 @@ import static org.awaitility.Awaitility.await;
  * {@code BatchSigningCommandHandler.downloadSource()} no longer branches on format — it
  * always calls {@code documentStoragePort.download(StorageRef)}. The item's storageKey is
  * therefore a bucket-relative MinIO key (plus an explicit {@code sourceBucket}), not a
- * presigned HTTP URL; {@code documentDownloadPort} is unused dead wiring left for Task 8.
+ * presigned HTTP URL; Task 8 deleted the now-unused {@code documentDownloadPort} wiring
+ * entirely.
  */
 class BatchSigningPdfPipelineIT extends IntegrationTestBase {
 
